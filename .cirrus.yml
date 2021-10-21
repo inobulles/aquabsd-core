@@ -1,8 +1,6 @@
 # $FreeBSD$
 
 compute_engine_instance:
-  # Image list available via
-  # gcloud compute images list --project freebsd-org-cloud-dev --no-standard-images
   platform: freebsd
   image_project: freebsd-org-cloud-dev
   image: freebsd-13-0-release-amd64
@@ -11,32 +9,30 @@ compute_engine_instance:
   disk: 40
 
 task:
-  matrix:
-  - name: World and kernel amd64 build and boot smoke test
-    env:
-      TARGET: amd64
-      TARGET_ARCH: amd64
-  - name: World and kernel arm64 build and boot smoke test
-    trigger_type: manual
-    env:
-      TARGET: arm64
-      TARGET_ARCH: aarch64
+  name: Build aquaBSD base and kernel for 'amd64' target
+  env:
+    TARGET: amd64
+    TARGET_ARCH: amd64
   timeout_in: 120m
   install_script:
-  - sh .cirrus-ci/pkg-install.sh qemu llvm12
+  - pkg install -y qemu llvm12
   setup_script:
   - uname -a
-  - df -m
+  - df -h
   - pkg --version
   - pw useradd user
   - mkdir -p /usr/obj/$(pwd -P)
   - chown user:user /usr/obj/$(pwd -P)
-  script:
-  - su user -c "make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes buildworld buildkernel"
-  package_script:
-  - su user -c "make CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes PKG_FORMAT=tar packages"
-  test_script:
-  - sh tools/boot/ci-qemu-test.sh
+  kernel_build_script:
+  - su user -c "make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildkernel"
+  base_build_script:
+  - su user -c "make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld"
+  distribution_script:
+  - su user -c "cd release/ && make CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz"
   post_script:
-  - df -m
-  - du -m -s /usr/obj
+  - ls -l /usr/obj/usr/src/amd64.amd64/release/
+  - df -h
+  - du -h -s /usr/obj
+  distribution_artifacts:
+    path: "/usr/obj/usr/src/amd64.amd64/release/kernel.txz"
+    path: "/usr/obj/usr/src/amd64.amd64/release/base.txz"
