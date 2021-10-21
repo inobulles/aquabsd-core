@@ -52,9 +52,9 @@
 #		like the -V command
 #
 
-TYPE="FreeBSD"
-REVISION="14.0"
-BRANCH="CURRENT"
+TYPE="aquaBSD"
+REVISION="1.0-1021a"
+BRANCH="BETA"
 if [ -n "${BRANCH_OVERRIDE}" ]; then
 	BRANCH=${BRANCH_OVERRIDE}
 fi
