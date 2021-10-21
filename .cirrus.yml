@@ -14,8 +14,6 @@ task:
     TARGET: amd64
     TARGET_ARCH: amd64
   timeout_in: 120m
-  install_script:
-  - pkg install -y qemu llvm12
   setup_script:
   - uname -a
   - df -h
@@ -24,11 +22,11 @@ task:
   - mkdir -p /usr/obj/$(pwd -P)
   - chown user:user /usr/obj/$(pwd -P)
   kernel_build_script:
-  - su user -c "make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildkernel"
+  - su user -c "make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildkernel"
   base_build_script:
-  - su user -c "make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld"
+  - su user -c "make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld"
   release_script:
-  - su user -c "cd release/ && make CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz src.txz"
+  - su user -c "cd release/ && make WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz src.txz"
   post_script:
   - ls -l /usr/obj/usr/src/amd64.amd64/release/
   - df -h
