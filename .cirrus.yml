@@ -28,7 +28,7 @@ task:
   base_build_script:
   - su user -c "make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld"
   release_script:
-  - su user -c "cd release/ && make CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz"
+  - su user -c "cd release/ && make CROSS_TOOLCHAIN=llvm12 WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz src.txz"
   post_script:
   - ls -l /usr/obj/usr/src/amd64.amd64/release/
   - df -h
@@ -36,3 +36,4 @@ task:
   distribution_artifacts:
     path: "/usr/obj/usr/src/amd64.amd64/release/kernel.txz"
     path: "/usr/obj/usr/src/amd64.amd64/release/base.txz"
+    path: "/usr/obj/usr/src/amd64.amd64/release/src.txz"
