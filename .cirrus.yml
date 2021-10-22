@@ -18,19 +18,21 @@ task:
   - uname -a
   - df -h
   - pkg --version
-  - pw useradd user
   - mkdir -p /usr/obj/$(pwd -P)
-  - chown user:user /usr/obj/$(pwd -P)
   kernel_build_script:
-  - su user -c "make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildkernel"
+  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildkernel
   base_build_script:
-  - su user -c "make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld"
-  release_script:
-  - su user -c "cd release/ && make WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz src.txz"
+  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld
+  distribute_script:
+  - mkdir -p /usr/obj/$(pwd -P)/amd64.amd64/release/dist/
+  - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ -DNO_ROOT distributekernel
+  - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT distributeworld
+  package_script:
+  - make packagekernel DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/
+  - make packageworld DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_LIB32=yes
   - mkdir .build/
-  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/kernel.txz .build/
-  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/base.txz .build/
-  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/src.txz .build/
+  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/dist/kernel.txz .build/
+  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/dist/base.txz .build/
   post_script:
   - ls -l .build/
   - df -h
