@@ -14,26 +14,26 @@ task:
     TARGET: amd64
     TARGET_ARCH: amd64
   timeout_in: 120m
-  work_dir_script: # TODO: include in 'setup_script'
-  - export WORK_DIR=$(pwd -P)
   setup_script:
   - uname -a
   - df -h
   - pkg --version
   - pw useradd user
-  - mkdir -p /usr/obj/$WORK_DIR
-  - chown user:user /usr/obj/$WORK_DIR
+  - mkdir -p /usr/obj/$(pwd -P)
+  - chown user:user /usr/obj/$(pwd -P)
   kernel_build_script:
   - su user -c "make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildkernel"
   base_build_script:
   - su user -c "make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes buildworld"
   release_script:
   - su user -c "cd release/ && make WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC kernel.txz base.txz src.txz"
+  - mkdir .build/
+  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/kernel.txz .build/
+  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/base.txz .build/
+  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/src.txz .build/
   post_script:
-  - ls -l /usr/obj/$WORK_DIR/amd64.amd64/release/
+  - ls -l .build/
   - df -h
   - du -h -s /usr/obj
   distribution_artifacts:
-    path: "/usr/obj/$WORK_DIR/amd64.amd64/release/kernel.txz"
-    path: "/usr/obj/$WORK_DIR/amd64.amd64/release/base.txz"
-    path: "/usr/obj/$WORK_DIR/amd64.amd64/release/src.txz"
+    path: ".build/*"
