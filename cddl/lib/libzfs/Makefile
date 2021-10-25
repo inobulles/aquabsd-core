@@ -27,7 +27,7 @@ LIBADD= \
 	zfs_core \
 	zutil
 
-INCS=	libzfs.h
+INCS=
 USER_C = \
         libzfs_changelist.c \
         libzfs_config.c \

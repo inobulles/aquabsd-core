@@ -66,11 +66,13 @@ __FBSDID("$FreeBSD$");
 #define	LINUX_PTRACE_DETACH		17
 #define	LINUX_PTRACE_SYSCALL		24
 #define	LINUX_PTRACE_SETOPTIONS		0x4200
+#define	LINUX_PTRACE_GETEVENTMSG	0x4201
 #define	LINUX_PTRACE_GETSIGINFO		0x4202
 #define	LINUX_PTRACE_GETREGSET		0x4204
 #define	LINUX_PTRACE_SEIZE		0x4206
 #define	LINUX_PTRACE_GET_SYSCALL_INFO	0x420e
 
+#define	LINUX_PTRACE_EVENT_EXEC		4
 #define	LINUX_PTRACE_EVENT_EXIT		6
 
 #define	LINUX_PTRACE_O_TRACESYSGOOD	1
@@ -85,6 +87,7 @@ __FBSDID("$FreeBSD$");
 #define	LINUX_PTRACE_O_SUSPEND_SECCOMP	2097152
 
 #define	LINUX_NT_PRSTATUS		0x1
+#define	LINUX_NT_PRFPREG		0x2
 #define	LINUX_NT_X86_XSTATE		0x202
 
 #define	LINUX_PTRACE_O_MASK	(LINUX_PTRACE_O_TRACESYSGOOD |	\
@@ -150,8 +153,12 @@ linux_ptrace_status(struct thread *td, pid_t pid, int status)
 	    lwpinfo.pl_flags & PL_FLAG_SCE)
 		status |= (LINUX_SIGTRAP | 0x80) << 8;
 	if ((pem->ptrace_flags & LINUX_PTRACE_O_TRACESYSGOOD) &&
-	    lwpinfo.pl_flags & PL_FLAG_SCX)
-		status |= (LINUX_SIGTRAP | 0x80) << 8;
+	    lwpinfo.pl_flags & PL_FLAG_SCX) {
+		if (lwpinfo.pl_flags & PL_FLAG_EXEC)
+			status |= (LINUX_SIGTRAP | LINUX_PTRACE_EVENT_EXEC << 8) << 8;
+		else
+			status |= (LINUX_SIGTRAP | 0x80) << 8;
+	}
 	if ((pem->ptrace_flags & LINUX_PTRACE_O_TRACEEXIT) &&
 	    lwpinfo.pl_flags & PL_FLAG_EXITED)
 		status |= (LINUX_SIGTRAP | LINUX_PTRACE_EVENT_EXIT << 8) << 8;
@@ -388,6 +395,14 @@ linux_ptrace_setoptions(struct thread *td, pid_t pid, l_ulong data)
 }
 
 static int
+linux_ptrace_geteventmsg(struct thread *td, pid_t pid, l_ulong data)
+{
+
+	linux_msg(td, "PTRACE_GETEVENTMSG not implemented; returning EINVAL");
+	return (EINVAL);
+}
+
+static int
 linux_ptrace_getsiginfo(struct thread *td, pid_t pid, l_ulong data)
 {
 	struct ptrace_lwpinfo lwpinfo;
@@ -541,6 +556,10 @@ linux_ptrace_getregset(struct thread *td, pid_t pid, l_ulong addr, l_ulong data)
 	switch (addr) {
 	case LINUX_NT_PRSTATUS:
 		return (linux_ptrace_getregset_prstatus(td, pid, data));
+	case LINUX_NT_PRFPREG:
+		linux_msg(td, "PTRAGE_GETREGSET NT_PRFPREG not implemented; "
+		    "returning EINVAL");
+		return (EINVAL);
 	case LINUX_NT_X86_XSTATE:
 		linux_msg(td, "PTRAGE_GETREGSET NT_X86_XSTATE not implemented; "
 		    "returning EINVAL");
@@ -611,6 +630,15 @@ linux_ptrace_get_syscall_info(struct thread *td, pid_t pid,
 		if (sr.sr_error == 0) {
 			si.exit.rval = sr.sr_retval[0];
 			si.exit.is_error = 0;
+		} else if (sr.sr_error == EJUSTRETURN) {
+			/*
+			 * EJUSTRETURN means the actual value to return
+			 * has already been put into td_frame; instead
+			 * of extracting it and trying to determine whether
+			 * it's an error or not just bail out and let
+			 * the ptracing process fall back to another method.
+			 */
+			si.op = LINUX_PTRACE_SYSCALL_INFO_NONE;
 		} else {
 			si.exit.rval = bsd_to_linux_errno(sr.sr_error);
 			si.exit.is_error = 1;
@@ -715,6 +743,9 @@ linux_ptrace(struct thread *td, struct linux_ptrace_args *uap)
 		break;
 	case LINUX_PTRACE_SETOPTIONS:
 		error = linux_ptrace_setoptions(td, pid, uap->data);
+		break;
+	case LINUX_PTRACE_GETEVENTMSG:
+		error = linux_ptrace_geteventmsg(td, pid, uap->data);
 		break;
 	case LINUX_PTRACE_GETSIGINFO:
 		error = linux_ptrace_getsiginfo(td, pid, uap->data);
