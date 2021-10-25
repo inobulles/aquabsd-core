@@ -238,6 +238,7 @@ static	const v_post mdoc_valids[MDOC_MAX - MDOC_Dd] = {
 	NULL,		/* %Q */
 	NULL,		/* %U */
 	NULL,		/* Ta */
+	post_xx,	/* Ax */
 };
 
 #define	RSORD_MAX 14 /* Number of `Rs' blocks. */
@@ -483,6 +484,8 @@ check_toptext(struct roff_man *mdoc, int ln, int pos, const char *p)
 		mandoc_msg(MANDOCERR_BX, ln, pos + (int)(cp - p), "Fx");
 	if ((cp = strstr(p, "DragonFly")) != NULL)
 		mandoc_msg(MANDOCERR_BX, ln, pos + (int)(cp - p), "Dx");
+	if ((cp = strstr(p, "aquaBSD")) != NULL)
+		mandoc_msg(MANDOCERR_BX, ln, pos + (int)(cp - p), "Ax");
 
 	cp = p;
 	while ((cp = strstr(cp + 1, "()")) != NULL) {
@@ -1500,6 +1503,9 @@ post_xx(POST_ARGS)
 		break;
 	case MDOC_Ox:
 		os = "OpenBSD";
+		break;
+	case MDOC_Ax:
+		os = "aquaBSD";
 		break;
 	case MDOC_Ux:
 		os = "UNIX";
@@ -2630,7 +2636,8 @@ post_bx(POST_ARGS)
 		macro = !strcmp(nch->string, "Open") ? "Ox" :
 		    !strcmp(nch->string, "Net") ? "Nx" :
 		    !strcmp(nch->string, "Free") ? "Fx" :
-		    !strcmp(nch->string, "DragonFly") ? "Dx" : NULL;
+		    !strcmp(nch->string, "DragonFly") ? "Dx" :
+			!strcmp(nch->string, "aquaBSD") ? "Ax" : NULL;
 		if (macro != NULL)
 			mandoc_msg(MANDOCERR_BX,
 			    n->line, n->pos, "%s", macro);

@@ -22,14 +22,14 @@
  * Be sure to escape strings.
  */
 
-LINE("1",		"FreeBSD General Commands Manual")
-LINE("2",		"FreeBSD System Calls Manual")
-LINE("3",		"FreeBSD Library Functions Manual")
+LINE("1",		"aquaBSD General Commands Manual")
+LINE("2",		"aquaBSD System Calls Manual")
+LINE("3",		"aquaBSD Library Functions Manual")
 LINE("3lua",		"Lua Library Functions Manual")
 LINE("3p",		"Perl Library Functions Manual")
-LINE("4",		"FreeBSD Kernel Interfaces Manual")
-LINE("5",		"FreeBSD File Formats Manual")
-LINE("6",		"FreeBSD Games Manual")
-LINE("7",		"FreeBSD Miscellaneous Information Manual")
-LINE("8",		"FreeBSD System Manager\'s Manual")
-LINE("9",		"FreeBSD Kernel Developer\'s Manual")
+LINE("4",		"aquaBSD Kernel Interfaces Manual")
+LINE("5",		"aquaBSD File Formats Manual")
+LINE("6",		"aquaBSD Games Manual")
+LINE("7",		"aquaBSD Miscellaneous Information Manual")
+LINE("8",		"aquaBSD System Manager\'s Manual")
+LINE("9",		"aquaBSD Kernel Developer\'s Manual")

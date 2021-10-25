@@ -437,6 +437,7 @@ enum	roff_tok {
 	MDOC__Q,
 	MDOC__U,
 	MDOC_Ta,
+	MDOC_Ax,
 	MDOC_MAX,
 	MAN_TH,
 	MAN_SH,

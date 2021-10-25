@@ -108,6 +108,20 @@ c_flag_body()
 	atf_check truncate -s 0 foo bar
 }
 
+atf_test_case b_flag
+b_flag_head()
+{
+	atf_set "descr" "Verify -c output"
+}
+b_flag_body()
+{
+	require_sparse_file_support
+	atf_check truncate -s 1337 A
+	atf_check truncate -s 69420 B
+	atf_check truncate -s 1t C
+	atf_check -o inline:'1337\tA\n69420\tB\n1099511627776\tC\n1099511698533\ttotal\n' du -abc A B C
+}
+
 atf_test_case g_flag
 g_flag_head()
 {
@@ -182,6 +196,7 @@ atf_init_test_cases()
 	atf_add_test_case A_flag
 	atf_add_test_case H_flag
 	atf_add_test_case I_flag
+	atf_add_test_case b_flag
 	atf_add_test_case g_flag
 	atf_add_test_case h_flag
 	atf_add_test_case k_flag

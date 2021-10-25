@@ -245,6 +245,7 @@ static const struct mdoc_term_act mdoc_term_acts[MDOC_MAX - MDOC_Dd] = {
 	{ NULL, termp____post }, /* %Q */
 	{ NULL, termp____post }, /* %U */
 	{ NULL, NULL }, /* Ta */
+	{ termp_xx_pre, termp_xx_post }, /* Ax */
 };
 
 static	int	 fn_prio;

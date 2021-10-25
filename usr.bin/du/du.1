@@ -28,7 +28,7 @@
 .\"	@(#)du.1	8.2 (Berkeley) 4/1/94
 .\" $FreeBSD$
 .\"
-.Dd August 1, 2019
+.Dd October 25, 2021
 .Dt DU 1
 .Os
 .Sh NAME
@@ -38,7 +38,7 @@
 .Nm
 .Op Fl Aclnx
 .Op Fl H | L | P
-.Op Fl g | h | k | m
+.Op Fl b | g | h | k | m
 .Op Fl a | s | d Ar depth
 .Op Fl B Ar blocksize
 .Op Fl I Ar mask
@@ -96,6 +96,12 @@ Display a grand total.
 Display an entry for all files and directories
 .Ar depth
 directories deep.
+.It Fl b
+Display block counts in single-byte blocks,
+by counting file sizes per-byte instead of counting per-block.
+When the
+.Fl b
+option is specified, the apparent size is always shown.
 .It Fl g
 Display block counts in 1073741824-byte (1 GiB) blocks.
 .It Fl h
@@ -122,12 +128,6 @@ Ignore files and directories with user
 flag
 .Pq Dv UF_NODUMP
 set.
-.It Fl r
-Generate messages about directories that cannot be read, files
-that cannot be opened, and so on.
-This is the default case.
-This option exists solely for conformance with
-.St -xpg4 .
 .It Fl s
 Display an entry for each specified file.
 (Equivalent to
@@ -234,13 +234,6 @@ as well as the
 .Ev BLOCKSIZE
 environment variable,
 are extensions to that specification.
-.Pp
-The flag
-.Op Fl r
-is accepted but ignored, for compatibility with systems implementing
-the obsolete
-.St -xcu5
-standard.
 .Sh HISTORY
 The
 .Nm
@@ -251,12 +244,6 @@ and
 options first appeared in
 .At v1 .
 .Pp
-The
-.Fl r
-option first appeared in
-.At III
-and is available since
-.Fx 3.5 .
 The
 .Fl k
 and
@@ -287,6 +274,18 @@ option first appeared in
 .Fl h
 first appeared in
 .Fx 4.0 .
+.Pp
+The obsolete
+.Fl r
+option was removed with
+.Ax Alps 1021a .
+It was originally accepted for compatibility with systems implementing the
+.St -xcu5
+standard.
+The
+.Fl b
+option first appeared in
+.Ax Alps 1021a .
 .Sh AUTHORS
 .An -nosplit
 This version of

@@ -98,18 +98,18 @@ main(int argc, char *argv[])
 {
 	FTS		*fts;
 	FTSENT		*p;
-	off_t		savednumber, curblocks;
+	off_t		savednumber, curbytes, curblocks;
 	off_t		threshold, threshold_sign;
 	int		ftsoptions;
 	int		depth;
-	int		Hflag, Lflag, aflag, sflag, dflag, cflag;
+	int		Hflag, Lflag, aflag, sflag, dflag, cflag, bflag;
 	int		lflag, ch, notused, rval;
 	char 		**save;
 	static char	dot[] = ".";
 
 	setlocale(LC_ALL, "");
 
-	Hflag = Lflag = aflag = sflag = dflag = cflag = lflag = Aflag = 0;
+	Hflag = Lflag = aflag = sflag = dflag = cflag = lflag = Aflag = bflag = 0;
 
 	save = argv;
 	ftsoptions = FTS_PHYSICAL;
@@ -121,7 +121,7 @@ main(int argc, char *argv[])
 	depth = INT_MAX;
 	SLIST_INIT(&ignores);
 
-	while ((ch = getopt_long(argc, argv, "+AB:HI:LPasd:cghklmnrt:x",
+	while ((ch = getopt_long(argc, argv, "+AB:HI:LPasd:cbghklmnrt:x",
 	    long_options, NULL)) != -1)
 		switch (ch) {
 		case 'A':
@@ -169,6 +169,12 @@ main(int argc, char *argv[])
 		case 'c':
 			cflag = 1;
 			break;
+		case 'b':
+			Aflag = 1;
+			hflag = 0;
+			bflag = 1;
+			blocksize = 1;
+			break;
 		case 'g':
 			hflag = 0;
 			blocksize = 1073741824;
@@ -190,10 +196,8 @@ main(int argc, char *argv[])
 		case 'n':
 			nodumpflag = 1;
 			break;
-		case 'r':		 /* Compatibility. */
-			break;
 		case 't' :
-			if (expand_number(optarg, &threshold) != 0 ||
+			if (expand_number(optarg, (uint64_t*) &threshold) != 0 ||
 			    threshold == 0) {
 				warnx("invalid threshold: %s", optarg);
 				usage();
@@ -249,7 +253,7 @@ main(int argc, char *argv[])
 		argv[1] = NULL;
 	}
 
-	if (blocksize == 0)
+	if (bflag)
 		(void)getbsize(&notused, &blocksize);
 
 	if (!Aflag) {
@@ -278,22 +282,25 @@ main(int argc, char *argv[])
 			if (ignorep(p))
 				break;
 
-			curblocks = Aflag ?
-			    howmany(p->fts_statp->st_size, cblocksize) :
-			    howmany(p->fts_statp->st_blocks, cblocksize);
+			curbytes = Aflag ?
+				p->fts_statp->st_size :
+				p->fts_statp->st_blocks;
+
+			curblocks = howmany(curbytes, cblocksize);
+
 			p->fts_parent->fts_bignum += p->fts_bignum +=
-			    curblocks;
+			    bflag ? curbytes : curblocks;
 
 			if (p->fts_level <= depth && threshold <=
 			    threshold_sign * howmany(p->fts_bignum *
 			    cblocksize, blocksize)) {
-				if (hflag > 0) {
+				if (hflag > 0 && !bflag) {
 					prthumanval(p->fts_bignum);
 					(void)printf("\t%s\n", p->fts_path);
 				} else {
 					(void)printf("%jd\t%s\n",
-					    (intmax_t)howmany(p->fts_bignum *
-					    cblocksize, blocksize),
+					    (intmax_t)(bflag ? p->fts_bignum :
+						howmany(p->fts_bignum * cblocksize, blocksize)),
 					    p->fts_path);
 				}
 			}
@@ -318,23 +325,25 @@ main(int argc, char *argv[])
 			    linkchk(p))
 				break;
 
-			curblocks = Aflag ?
-			    howmany(p->fts_statp->st_size, cblocksize) :
-			    howmany(p->fts_statp->st_blocks, cblocksize);
+			curbytes = Aflag ?
+				p->fts_statp->st_size :
+				p->fts_statp->st_blocks;
+
+			curblocks = howmany(curbytes, cblocksize);
 
 			if (aflag || p->fts_level == 0) {
-				if (hflag > 0) {
+				if (hflag > 0 && !bflag) {
 					prthumanval(curblocks);
 					(void)printf("\t%s\n", p->fts_path);
 				} else {
 					(void)printf("%jd\t%s\n",
-					    (intmax_t)howmany(curblocks *
-					    cblocksize, blocksize),
+					    (intmax_t)(bflag ? curbytes :
+						howmany(curblocks * cblocksize, blocksize)),
 					    p->fts_path);
 				}
 			}
 
-			p->fts_parent->fts_bignum += curblocks;
+			p->fts_parent->fts_bignum += bflag ? curbytes : curblocks;
 		}
 		savednumber = p->fts_parent->fts_bignum;
 	}
@@ -343,12 +352,13 @@ main(int argc, char *argv[])
 		err(1, "fts_read");
 
 	if (cflag) {
-		if (hflag > 0) {
+		if (hflag > 0 && !bflag) {
 			prthumanval(savednumber);
 			(void)printf("\ttotal\n");
 		} else {
-			(void)printf("%jd\ttotal\n", (intmax_t)howmany(
-			    savednumber * cblocksize, blocksize));
+			(void)printf("%jd\ttotal\n",
+				(intmax_t)(bflag ? savednumber :
+				howmany(savednumber * cblocksize, blocksize)));
 		}
 	}
 
@@ -509,7 +519,7 @@ static void
 usage(void)
 {
 	(void)fprintf(stderr,
-		"usage: du [-Aclnx] [-H | -L | -P] [-g | -h | -k | -m] "
+		"usage: du [-Aclnx] [-H | -L | -P] [-b | -g | -h | -k | -m] "
 		"[-a | -s | -d depth] [-B blocksize] [-I mask] "
 		"[-t threshold] [file ...]\n");
 	exit(EX_USAGE);

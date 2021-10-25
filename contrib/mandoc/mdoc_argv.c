@@ -265,6 +265,7 @@ static	const struct mdocarg mdocargs[MDOC_MAX - MDOC_Dd] = {
 	{ ARGSFL_NONE, NULL }, /* %Q */
 	{ ARGSFL_NONE, NULL }, /* %U */
 	{ ARGSFL_NONE, NULL }, /* Ta */
+	{ ARGSFL_DELIM, NULL }, /* Ax */
 };
 
 

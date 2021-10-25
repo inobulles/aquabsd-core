@@ -542,6 +542,7 @@ in the alphabetical
 .It Ic \&Fx Ta Fx
 .It Ic \&Ox Ta Ox
 .It Ic \&Dx Ta Dx
+.It Ic \&Ax Ta Ax
 .El
 .Sh MACRO REFERENCE
 This section is a canonical reference of all macros, arranged
@@ -777,8 +778,9 @@ See also
 .Ic \&Dx ,
 .Ic \&Fx ,
 .Ic \&Nx ,
+.Ic \&Ox ,
 and
-.Ic \&Ox .
+.Ic \&Ax .
 .It Ic \&Bc
 Close a
 .Ic \&Bo
@@ -1121,8 +1123,9 @@ See also
 .Ic \&Dx ,
 .Ic \&Fx ,
 .Ic \&Nx ,
+.Ic \&Ox ,
 and
-.Ic \&Ox .
+.Ic \&Ax .
 .It Ic \&Bt
 Supported only for compatibility, do not use this in new manuals.
 Prints
@@ -1144,8 +1147,9 @@ See also
 .Ic \&Dx ,
 .Ic \&Fx ,
 .Ic \&Nx ,
+.Ic \&Ox ,
 and
-.Ic \&Ox .
+.Ic \&Ax .
 .It Ic \&Cd Ar line
 Kernel configuration declaration.
 This denotes strings accepted by
@@ -1384,6 +1388,7 @@ See also
 .Ic \&At ,
 .Ic \&Bsx ,
 .Ic \&Bx ,
+.Ic \&Dx ,
 .Ic \&Fx ,
 .Ic \&Nx ,
 and
@@ -1679,8 +1684,9 @@ See also
 .Ic \&Bx ,
 .Ic \&Dx ,
 .Ic \&Nx ,
+.Ic \&Ox ,
 and
-.Ic \&Ox .
+.Ic \&Ax .
 .It Ic \&Hf Ar filename
 This macro is not implemented in
 .Xr mandoc 1 .
@@ -1987,8 +1993,9 @@ See also
 .Ic \&Bx ,
 .Ic \&Dx ,
 .Ic \&Fx ,
+.Ic \&Ox ,
 and
-.Ic \&Ox .
+.Ic \&Ax .
 .It Ic \&Oc
 Close multi-line
 .Ic \&Oo
@@ -2074,8 +2081,9 @@ See also
 .Ic \&Bx ,
 .Ic \&Dx ,
 .Ic \&Fx ,
+.Ic \&Nx ,
 and
-.Ic \&Nx .
+.Ic \&Ax .
 .It Ic \&Pa Ar name ...
 An absolute or relative file system path, or a file or directory name.
 If an argument is not provided, the character
@@ -2866,6 +2874,7 @@ then the macro accepts an arbitrary number of arguments.
 .It Ic \&Ap  Ta    Yes      Ta    Yes      Ta    0
 .It Ic \&Ar  Ta    Yes      Ta    Yes      Ta    n
 .It Ic \&At  Ta    Yes      Ta    Yes      Ta    1
+.It Ic \&Ax  Ta    Yes      Ta    Yes      Ta    n
 .It Ic \&Bsx Ta    Yes      Ta    Yes      Ta    n
 .It Ic \&Bt  Ta    \&No     Ta    \&No     Ta    0
 .It Ic \&Bx  Ta    Yes      Ta    Yes      Ta    n
