@@ -25,7 +25,7 @@
 #define	KEY_sec		 1
 #define	KEY_Nm		 38
 #define	KEY_Nd		 39
-#define	KEY_MAX		 40
+#define	KEY_MAX		 41
 
 #define	TYPE_arch	 0x0000000000000001ULL
 #define	TYPE_sec	 0x0000000000000002ULL
