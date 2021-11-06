@@ -89,6 +89,11 @@ COMMON_SRCS= b_exp.c b_log.c b_tgamma.c \
 	s_tan.c s_tanf.c s_tanh.c s_tanhf.c s_tgammaf.c s_trunc.c s_truncf.c \
 	w_cabs.c w_cabsf.c w_drem.c w_dremf.c
 
+# IEEE-754 2008 and ISO/IEC TS 18661-4 half-cycle trignometric functions
+COMMON_SRCS+= s_cospi.c s_cospif.c \
+	s_sinpi.c s_sinpif.c \
+	s_tanpi.c s_tanpif.c
+
 # Location of fpmath.h and _fpmath.h
 .if exists(${LIBCSRCDIR}/${MACHINE_ARCH})
 LIBC_ARCH=${MACHINE_ARCH}
@@ -112,13 +117,13 @@ COMMON_SRCS+=	catrigl.c \
 	e_lgammal.c e_lgammal_r.c e_powl.c \
 	e_remainderl.c e_sinhl.c e_sqrtl.c \
 	invtrig.c k_cosl.c k_sinl.c k_tanl.c \
-	s_asinhl.c s_atanl.c s_cbrtl.c s_ceill.c \
-	s_clogl.c s_cosl.c s_cprojl.c \
+	s_asinhl.c s_atanl.c s_cbrtl.c s_ceill.c s_cexpl.c \
+	s_clogl.c s_cosl.c s_cospil.c s_cprojl.c \
 	s_csqrtl.c s_erfl.c s_exp2l.c s_expl.c s_floorl.c s_fmal.c \
 	s_fmaxl.c s_fminl.c s_frexpl.c s_logbl.c s_logl.c s_nanl.c \
 	s_nextafterl.c s_nexttoward.c s_remquol.c s_rintl.c s_roundl.c \
-	s_scalbnl.c s_sinl.c s_sincosl.c \
-	s_tanhl.c s_tanl.c s_truncl.c w_cabsl.c
+	s_scalbnl.c s_sinl.c s_sincosl.c s_sinpil.c \
+	s_tanhl.c s_tanl.c s_tanpil.c s_truncl.c w_cabsl.c
 # Work around this warning from gcc:
 #     lib/msun/ld80/e_powl.c:275:1: error: floating constant exceeds range of
 #     'long double' [-Werror=overflow]
@@ -126,12 +131,6 @@ COMMON_SRCS+=	catrigl.c \
 # See also: https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=130067
 .if ${COMPILER_TYPE} == "gcc"
 CFLAGS.e_powl.c+= -Wno-error=overflow
-
-# IEEE-754 2008 and ISO/IEC TS 18661-4 half-cycle trignometric functions
-COMMON_SRCS+=	s_cospi.c s_cospif.c s_cospil.c \
-	s_sinpi.c s_sinpif.c s_sinpil.c \
-	s_tanpi.c s_tanpif.c s_tanpil.c
-
 .endif
 .endif
 
@@ -190,7 +189,7 @@ MLINKS+=ccos.3 ccosf.3 ccos.3 csin.3 ccos.3 csinf.3 ccos.3 ctan.3 ccos.3 ctanf.3
 MLINKS+=ccosh.3 ccoshf.3 ccosh.3 csinh.3 ccosh.3 csinhf.3 \
 	ccosh.3 ctanh.3 ccosh.3 ctanhf.3
 MLINKS+=ceil.3 ceilf.3 ceil.3 ceill.3
-MLINKS+=cexp.3 cexpf.3
+MLINKS+=cexp.3 cexpf.3 cexp.3 cexpl.3
 MLINKS+=cimag.3 cimagf.3 cimag.3 cimagl.3 \
 	cimag.3 conj.3 cimag.3 conjf.3 cimag.3 conjl.3 \
 	cimag.3 cproj.3 cimag.3 cprojf.3 cimag.3 cprojl.3 \

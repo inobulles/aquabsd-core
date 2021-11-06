@@ -713,8 +713,10 @@ ip_mrouter_init(struct socket *so, int version)
     mtx_init(&V_bw_upcalls_ring_mtx, "mroute upcall buf_ring mtx", NULL, MTX_DEF);
     V_bw_upcalls_ring = buf_ring_alloc(BW_UPCALLS_MAX, M_MRTABLE,
 	M_NOWAIT, &V_bw_upcalls_ring_mtx);
-    if (!V_bw_upcalls_ring)
+    if (!V_bw_upcalls_ring) {
+	MRW_WUNLOCK();
 	return (ENOMEM);
+    }
 
     /* Create upcall thread */
     upcall_thread_shutdown = 0;
@@ -1466,6 +1468,9 @@ X_ip_mforward(struct ip *ip, struct ifnet *ifp, struct mbuf *m,
 		timevalclear(&rt->mfc_last_assert);
 
 		buf_ring_enqueue(rt->mfc_stall_ring, rte);
+
+		/* Add RT to hashtable as it didn't exist before */
+		LIST_INSERT_HEAD(&V_mfchashtbl[hash], rt, mfc_hash);
 	} else {
 		/* determine if queue has overflowed */
 		if (buf_ring_full(rt->mfc_stall_ring)) {

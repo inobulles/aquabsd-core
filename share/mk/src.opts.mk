@@ -393,6 +393,9 @@ MK_KERBEROS_SUPPORT:=	no
 .if ${MK_CXX} == "no"
 MK_CLANG:=	no
 MK_GOOGLETEST:=	no
+MK_OFED:=	no
+MK_OPENMP:=	no
+MK_PMC:=	no
 MK_TESTS:=	no
 .endif
 
@@ -418,6 +421,7 @@ MK_NLS_CATALOGS:= no
 .if ${MK_OPENSSL} == "no"
 MK_DMAGENT:=	no
 MK_OPENSSH:=	no
+MK_OPENSSL_KTLS:=	no
 MK_KERBEROS:=	no
 MK_KERBEROS_SUPPORT:=	no
 MK_LDNS:=	no

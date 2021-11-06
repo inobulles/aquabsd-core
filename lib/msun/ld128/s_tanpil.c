@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2017 Steven G. Kargl
+ * Copyright (c) 2017-2021 Steven G. Kargl
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,9 +26,6 @@
 
 /*
  * See ../src/s_tanpi.c for implementation details.
- *
- * FIXME: This has not been compiled nor has it been tested for accuracy.
- * FIXME: This should use bit twiddling.
  */
 
 #include "math.h"
@@ -42,7 +39,7 @@ pi_hi = 3.14159265358979322702026593105983920e+00L,
 pi_lo = 1.14423774522196636802434264184180742e-17L;
 
 static inline long double
-__kernel_tanpi(long double x)
+__kernel_tanpil(long double x)
 {
 	long double hi, lo, t;
 
@@ -72,10 +69,10 @@ volatile static const double vzero = 0;
 long double
 tanpil(long double x)
 {
-	long double ax, hi, lo, xf;
+	long double ax, hi, lo, xf, t;
 	uint32_t ix;
 
-	ax = fabsl(ax);
+	ax = fabsl(x);
 
 	if (ax < 1) {
 		if (ax < 0.5) {
@@ -83,7 +80,7 @@ tanpil(long double x)
 				if (x == 0)
 					return (x);
 				hi = (double)x;
-				hi *= 0x1p113L
+				hi *= 0x1p113L;
 				lo = x * 0x1p113L - hi;
 				t = (pi_lo + pi_hi) * lo + pi_lo * lo +
 				    pi_hi * hi;
@@ -94,19 +91,25 @@ tanpil(long double x)
 			return ((ax - ax) / (ax - ax));
 		else
 			t = -__kernel_tanpil(1 - ax);
-		return (copysignl(t, x));
+		return (x < 0 ? -t : t);
 	}
 
 	if (ix < 0x1p112) {
-		xf = floorl(ax);
-		ax -= xf;
+		/* Split x = n + r with 0 <= r < 1. */
+		xf = (ax + 0x1p112L) - 0x1p112L;        /* Integer part */
+		ax -= xf;                               /* Remainder */
+		if (ax < 0) {
+			ax += 1;
+			xf -= 1;
+		}
+
 		if (ax < 0.5)
 			t = ax == 0 ? 0 : __kernel_tanpil(ax);
 		else if (ax == 0.5)
 			return ((ax - ax) / (ax - ax));
 		else
 			t = -__kernel_tanpil(1 - ax);
-		return (copysignl(t, x));
+		return (x < 0 ? -t : t);
 	}
 
 	/* x = +-inf or nan. */
@@ -114,7 +117,7 @@ tanpil(long double x)
 		return (vzero / vzero);
 
 	/*
-	 * |x| >= 0x1p53 is always an integer, so return +-0.
+	 * |x| >= 0x1p112 is always an integer, so return +-0.
 	 */
 	return (copysignl(0, x));
 }

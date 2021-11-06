@@ -1316,7 +1316,7 @@ rack_init_sysctls(void)
 	    SYSCTL_CHILDREN(rack_timers),
 	    OID_AUTO, "maxrto", CTLFLAG_RW,
 	    &rack_rto_max, 4000000,
-	    "Maxiumum RTO in microseconds -- should be at least as large as min_rto");
+	    "Maximum RTO in microseconds -- should be at least as large as min_rto");
 	SYSCTL_ADD_S32(&rack_sysctl_ctx,
 	    SYSCTL_CHILDREN(rack_timers),
 	    OID_AUTO, "minto", CTLFLAG_RW,
@@ -2422,7 +2422,8 @@ rack_log_rtt_upd(struct tcpcb *tp, struct tcp_rack *rack, uint32_t t, uint32_t l
 			log.u_bbr.pkt_epoch = rsm->r_start;
 			log.u_bbr.lost = rsm->r_end;
 			log.u_bbr.cwnd_gain = rsm->r_rtr_cnt;
-			log.u_bbr.pacing_gain = rsm->r_flags;
+			/* We loose any upper of the 24 bits */
+			log.u_bbr.pacing_gain = (uint16_t)rsm->r_flags;
 		} else {
 			/* Its a SYN */
 			log.u_bbr.pkt_epoch = rack->rc_tp->iss;
@@ -5363,8 +5364,6 @@ rack_get_persists_timer_val(struct tcpcb *tp, struct tcp_rack *rack)
 	t = (tp->t_srtt + (tp->t_rttvar << 2));
 	RACK_TCPT_RANGESET(tt, t * tcp_backoff[tp->t_rxtshift],
  	    rack_persist_min, rack_persist_max, rack->r_ctl.timer_slop);
-	if (tp->t_rxtshift < TCP_MAXRXTSHIFT)
-		tp->t_rxtshift++;
 	rack->r_ctl.rc_hpts_flags |= PACE_TMR_PERSIT;
 	ret_val = (uint32_t)tt;
 	return (ret_val);
@@ -6672,6 +6671,7 @@ rack_remxt_tmr(struct tcpcb *tp)
 		if (rsm->r_flags & RACK_ACKED)
 			rsm->r_flags |= RACK_WAS_ACKED;
 		rsm->r_flags &= ~(RACK_ACKED | RACK_SACK_PASSED | RACK_WAS_SACKPASS);
+		rsm->r_flags |= RACK_MUST_RXT;
 	}
 	/* Clear the count (we just un-acked them) */
 	rack->r_ctl.rc_last_timeout_snduna = tp->snd_una;
@@ -7259,7 +7259,6 @@ rack_update_rsm(struct tcpcb *tp, struct tcp_rack *rack,
     struct rack_sendmap *rsm, uint64_t ts, uint16_t add_flag)
 {
 	int32_t idx;
-	uint16_t stripped_flags;
 
 	rsm->r_rtr_cnt++;
 	rack_log_retran_reason(rack, rsm, __LINE__, 0, 2);
@@ -7280,7 +7279,6 @@ rack_update_rsm(struct tcpcb *tp, struct tcp_rack *rack,
 	 */
 	rsm->r_fas = ctf_flight_size(rack->rc_tp,
 				     rack->r_ctl.rc_sacked);
-	stripped_flags = rsm->r_flags & ~(RACK_SENT_SP|RACK_SENT_FP);
 	if (rsm->r_flags & RACK_ACKED) {
 		/* Problably MTU discovery messing with us */
 		rsm->r_flags &= ~RACK_ACKED;
@@ -14448,11 +14446,20 @@ rack_do_segment_nounlock(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		 * at least use timestamps if available to validate).
 		 */
 		rack->forced_ack = 0;
-		us_rtt = us_cts - rack->r_ctl.forced_ack_ts;
-		if (us_rtt == 0)
-			us_rtt = 1;
-		rack_apply_updated_usrtt(rack, us_rtt, us_cts);
-		tcp_rack_xmit_timer(rack, us_rtt, 0, us_rtt, 3, NULL, 1);
+		if (tiwin == tp->snd_wnd) {
+			/*
+			 * Only apply the RTT update if this is
+			 * a response to our window probe. And that
+			 * means the rwnd sent must match the current
+			 * snd_wnd. If it does not, then we got a
+			 * window update ack instead.
+			 */
+			us_rtt = us_cts - rack->r_ctl.forced_ack_ts;
+			if (us_rtt == 0)
+				us_rtt = 1;
+			rack_apply_updated_usrtt(rack, us_rtt, us_cts);
+			tcp_rack_xmit_timer(rack, us_rtt, 0, us_rtt, 3, NULL, 1);
+		}
 	}
 	/*
 	 * This is the one exception case where we set the rack state
@@ -14909,6 +14916,7 @@ pace_to_fill_cwnd(struct tcp_rack *rack, int32_t slot, uint32_t len, uint32_t se
 static int32_t
 rack_get_pacing_delay(struct tcp_rack *rack, struct tcpcb *tp, uint32_t len, struct rack_sendmap *rsm, uint32_t segsiz)
 {
+	uint64_t srtt;
 	int32_t slot = 0;
 	int can_start_hw_pacing = 1;
 	int err;
@@ -14921,7 +14929,7 @@ rack_get_pacing_delay(struct tcp_rack *rack, struct tcpcb *tp, uint32_t len, str
 		 * quicker then possible. But thats ok we don't want
 		 * the peer to have a gap in data sending.
 		 */
-		uint32_t srtt, cwnd, tr_perms = 0;
+		uint64_t cwnd, tr_perms = 0;
 		int32_t reduce = 0;
 
 	old_method:
@@ -14971,7 +14979,7 @@ rack_get_pacing_delay(struct tcp_rack *rack, struct tcpcb *tp, uint32_t len, str
 			rack_log_pacing_delay_calc(rack, len, slot, tr_perms, reduce, 0, 7, __LINE__, NULL, 0);
 	} else {
 		uint64_t bw_est, res, lentim, rate_wanted;
-		uint32_t orig_val, srtt, segs, oh;
+		uint32_t orig_val, segs, oh;
 		int capped = 0;
 		int prev_fill;
 
@@ -15196,7 +15204,7 @@ done_w_hdwr:
 				srtt = rack->rc_tp->t_srtt;
 			else
 				srtt = RACK_INITIAL_RTO * HPTS_USEC_IN_MSEC;	/* its in ms convert */
-			if (srtt < slot) {
+			if (srtt < (uint64_t)slot) {
 				rack_log_pacing_delay_calc(rack, srtt, slot, rate_wanted, bw_est, lentim, 99, __LINE__, NULL, 0);
 				slot = srtt;
 			}
@@ -16104,12 +16112,25 @@ rack_fast_rsm_output(struct tcpcb *tp, struct tcp_rack *rack, struct rack_sendma
 	rack_start_hpts_timer(rack, tp, cts, slot, len, 0);
 	if (rack->r_must_retran) {
 		rack->r_ctl.rc_out_at_rto -= (rsm->r_end - rsm->r_start);
-		if (SEQ_GEQ(rsm->r_end, rack->r_ctl.rc_snd_max_at_rto)) {
+		if ((SEQ_GEQ(rsm->r_end, rack->r_ctl.rc_snd_max_at_rto)) ||
+		    ((rsm->r_flags & RACK_MUST_RXT) == 0)) {
 			/*
-			 * We have retransmitted all we need.
+			 * We have retransmitted all we need. If 
+			 * RACK_MUST_RXT is not set then we need to
+			 * not retransmit this guy.
 			 */
 			rack->r_must_retran = 0;
 			rack->r_ctl.rc_out_at_rto = 0;
+			if ((rsm->r_flags & RACK_MUST_RXT) == 0) {
+				/* Not one we should rxt */
+				goto failed;
+			} else {
+				/* Clear the flag */
+				rsm->r_flags &= ~RACK_MUST_RXT;
+			}
+		} else {
+			/* Remove  the flag */
+			rsm->r_flags &= ~RACK_MUST_RXT;
 		}
 	}
 #ifdef TCP_ACCOUNTING
@@ -16996,8 +17017,8 @@ again:
 	if (rack->r_must_retran &&
 	    (rsm == NULL)) {
 		/*
-		 * Non-Sack and we had a RTO or MTU change, we
-		 * need to retransmit until we reach
+		 * Non-Sack and we had a RTO or Sack/non-Sack and a 
+		 * MTU change, we need to retransmit until we reach
 		 * the former snd_max (rack->r_ctl.rc_snd_max_at_rto).
 		 */
 		if (SEQ_GT(tp->snd_max, tp->snd_una)) {
@@ -17020,12 +17041,24 @@ again:
 				sb = &so->so_snd;
 				goto just_return_nolock;
 			}
-			sack_rxmit = 1;
-			len = rsm->r_end - rsm->r_start;
-			sendalot = 0;
-			sb_offset = rsm->r_start - tp->snd_una;
-			if (len >= segsiz)
-				len = segsiz;
+			if ((rsm->r_flags & RACK_MUST_RXT) == 0) {
+				/* It does not have the flag, we are done */
+				rack->r_must_retran = 0;
+				rack->r_ctl.rc_out_at_rto = 0;
+			} else {
+				sack_rxmit = 1;
+				len = rsm->r_end - rsm->r_start;
+				sendalot = 0;
+				sb_offset = rsm->r_start - tp->snd_una;
+				if (len >= segsiz)
+					len = segsiz;
+				/* 
+				 * Delay removing the flag RACK_MUST_RXT so
+				 * that the fastpath for retransmit will
+				 * work with this rsm.
+				 */
+
+			}
 		} else {
 			/* We must be done if there is nothing outstanding */
 			rack->r_must_retran = 0;
@@ -17071,6 +17104,15 @@ again:
 		ret = rack_fast_rsm_output(tp, rack, rsm, ts_val, cts, ms_cts, &tv, len, doing_tlp);
 		if (ret == 0)
 			return (0);
+	}
+	if (rsm && (rsm->r_flags & RACK_MUST_RXT)) {
+		/* 
+		 * Clear the flag in prep for the send
+		 * note that if we can't get an mbuf
+		 * and fail, we won't retransmit this
+		 * rsm but that should be ok (its rare).
+		 */
+		rsm->r_flags &= ~RACK_MUST_RXT;
 	}
 	so = inp->inp_socket;
 	sb = &so->so_snd;
@@ -19305,6 +19347,7 @@ rack_mtu_change(struct tcpcb *tp)
 	 * The MSS may have changed
 	 */
 	struct tcp_rack *rack;
+	struct rack_sendmap *rsm;
 
 	rack = (struct tcp_rack *)tp->t_fb_ptr;
 	if (rack->r_ctl.rc_pace_min_segs != ctf_fixed_maxseg(tp)) {
@@ -19321,7 +19364,10 @@ rack_mtu_change(struct tcpcb *tp)
 						rack->r_ctl.rc_sacked);
 		rack->r_ctl.rc_snd_max_at_rto = tp->snd_max;
 		rack->r_must_retran = 1;
-
+		/* Mark all inflight to needing to be rxt'd */
+		TAILQ_FOREACH(rsm, &rack->r_ctl.rc_tmap, r_tnext) {
+			rsm->r_flags |= RACK_MUST_RXT;
+		}
 	}
 	sack_filter_clear(&rack->r_ctl.rack_sf, tp->snd_una);
 	/* We don't use snd_nxt to retransmit */
@@ -20244,8 +20290,54 @@ static int
 rack_set_sockopt(struct socket *so, struct sockopt *sopt,
     struct inpcb *inp, struct tcpcb *tp, struct tcp_rack *rack)
 {
+#ifdef INET6
+	struct ip6_hdr *ip6 = (struct ip6_hdr *)rack->r_ctl.fsb.tcp_ip_hdr;
+#endif
+#ifdef INET
+	struct ip *ip = (struct ip *)rack->r_ctl.fsb.tcp_ip_hdr;
+#endif
 	uint64_t loptval;
 	int32_t error = 0, optval;
+
+	switch (sopt->sopt_level) {
+#ifdef INET6
+	case IPPROTO_IPV6:
+		MPASS(inp->inp_vflag & INP_IPV6PROTO);
+		switch (sopt->sopt_name) {
+		case IPV6_USE_MIN_MTU:
+			tcp6_use_min_mtu(tp);
+			break;
+		case IPV6_TCLASS:
+			/*
+			 * The DSCP codepoint has changed, update the fsb.
+			 */
+			ip6->ip6_flow = (ip6->ip6_flow & ~IPV6_FLOWINFO_MASK) |
+			    (rack->rc_inp->inp_flow & IPV6_FLOWINFO_MASK);
+			break;
+		}
+		INP_WUNLOCK(inp);
+		return (0);
+#endif
+#ifdef INET
+	case IPPROTO_IP:
+		switch (sopt->sopt_name) {
+		case IP_TOS:
+			/*
+			 * The DSCP codepoint has changed, update the fsb.
+			 */
+			ip->ip_tos = rack->rc_inp->inp_ip_tos;
+			break;
+		case IP_TTL:
+			/*
+			 * The TTL has changed, update the fsb.
+			 */
+			ip->ip_ttl = rack->rc_inp->inp_ip_ttl;
+			break;
+		}
+		INP_WUNLOCK(inp);
+		return (0);
+#endif
+	}
 
 	switch (sopt->sopt_name) {
 	case TCP_RACK_TLP_REDUCE:		/*  URL:tlp_reduce */

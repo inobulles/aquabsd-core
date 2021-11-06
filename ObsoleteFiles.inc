@@ -40,6 +40,17 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20211027: libdialog shlib bumped to version 10 for dialog 1.3
+OLD_LIBS+=usr/lib/libdialog.so.9
+OLD_LIBS+=usr/lib/libdpv.so.2
+OLD_LIBS+=usr/lib32/libdialog.so.9
+OLD_LIBS+=usr/lib32/libdpv.so.2
+
+# 20211026: retire obsolete iscsi initiator
+OLD_FILES+=sbin/iscontrol
+OLD_FILES+=usr/share/man/man4/iscsi_initiator.4.gz
+OLD_FILES+=usr/share/man/man8/iscontrol.8.gz
+
 # 20211022
 OLD_FILES+=sbin/spppcontrol
 .if ${TARGET_ARCH} == "i386"

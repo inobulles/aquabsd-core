@@ -22,6 +22,7 @@ arm/arm/gic_acpi.c				optional acpi
 arm/arm/gic_fdt.c				optional fdt
 arm/arm/gic_if.m				standard
 arm/arm/pmu.c					standard
+arm/arm/pmu_acpi.c				optional acpi
 arm/arm/pmu_fdt.c				optional fdt
 arm64/acpica/acpi_iort.c			optional acpi
 arm64/acpica/acpi_machdep.c			optional acpi
@@ -127,6 +128,8 @@ ghashv8-armx.o					optional armv8crypto	\
 
 crypto/des/des_enc.c				optional netsmb
 crypto/openssl/ossl_aarch64.c			optional ossl
+crypto/openssl/aarch64/aesv8-armx.S		optional ossl		\
+	compile-with	"${CC} -c ${CFLAGS:N-mgeneral-regs-only} ${WERROR} -march=armv8-a+crypto ${.IMPSRC}"
 crypto/openssl/aarch64/chacha-armv8.S		optional ossl		\
 	compile-with	"${CC} -c ${CFLAGS:N-mgeneral-regs-only} ${WERROR} ${.IMPSRC}"
 crypto/openssl/aarch64/poly1305-armv8.S		optional ossl		\
@@ -136,6 +139,8 @@ crypto/openssl/aarch64/sha1-armv8.S		optional ossl		\
 crypto/openssl/aarch64/sha256-armv8.S		optional ossl		\
 	compile-with	"${CC} -c ${CFLAGS:N-mgeneral-regs-only} ${WERROR} ${.IMPSRC}"
 crypto/openssl/aarch64/sha512-armv8.S		optional ossl		\
+	compile-with	"${CC} -c ${CFLAGS:N-mgeneral-regs-only} ${WERROR} ${.IMPSRC}"
+crypto/openssl/aarch64/vpaes-armv8.S		optional ossl		\
 	compile-with	"${CC} -c ${CFLAGS:N-mgeneral-regs-only} ${WERROR} ${.IMPSRC}"
 
 dev/acpica/acpi_bus_if.m			optional acpi
@@ -176,8 +181,7 @@ dev/cpufreq/cpufreq_dt.c			optional cpufreq fdt
 dev/dwc/if_dwc.c				optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399 | fdt dwc_socfpga soc_intel_stratix10
 dev/dwc/if_dwc_if.m				optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399 | fdt dwc_socfpga soc_intel_stratix10
 
-dev/enetc/enetc_mdio.c				optional enetc soc_nxp_ls | enetc_mdio soc_nxp_ls
-dev/enetc/enetc_mdio_pci.c			optional enetc_mdio pci soc_nxp_ls
+dev/enetc/enetc_mdio.c				optional enetc soc_nxp_ls
 dev/enetc/if_enetc.c				optional enetc iflib pci fdt soc_nxp_ls
 
 dev/etherswitch/felix/felix.c			optional enetc etherswitch fdt felix pci soc_nxp_ls
@@ -518,9 +522,11 @@ tegra210_xusb.fw				optional tegra210_xusb_fw	\
 # NXP
 arm/freescale/vybrid/vf_i2c.c			optional vf_i2c iicbus SOC_NXP_LS
 arm64/qoriq/qoriq_dw_pci.c			optional pci fdt SOC_NXP_LS
+arm64/qoriq/qoriq_gpio_pic.c			optional gpio fdt SOC_NXP_LS
 arm64/qoriq/qoriq_therm.c			optional pci fdt SOC_NXP_LS
 arm64/qoriq/qoriq_therm_if.m			optional pci fdt SOC_NXP_LS
 arm64/qoriq/clk/ls1028a_clkgen.c		optional clk SOC_NXP_LS
+arm64/qoriq/clk/ls1028a_flexspi_clk.c		optional clk SOC_NXP_LS
 arm64/qoriq/clk/ls1046a_clkgen.c		optional clk SOC_NXP_LS
 arm64/qoriq/clk/lx2160a_clkgen.c		optional clk SOC_NXP_LS
 arm64/qoriq/clk/qoriq_clk_pll.c			optional clk SOC_NXP_LS
