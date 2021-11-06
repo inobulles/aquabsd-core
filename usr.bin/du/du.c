@@ -253,7 +253,7 @@ main(int argc, char *argv[])
 		argv[1] = NULL;
 	}
 
-	if (bflag)
+	if (blocksize == 0)
 		(void)getbsize(&notused, &blocksize);
 
 	if (!Aflag) {
@@ -294,13 +294,15 @@ main(int argc, char *argv[])
 			if (p->fts_level <= depth && threshold <=
 			    threshold_sign * howmany(p->fts_bignum *
 			    cblocksize, blocksize)) {
-				if (hflag > 0 && !bflag) {
+				if (bflag) {
+					(void)printf("%jd\t%s\n",
+						(intmax_t) p->fts_bignum, p->fts_path);
+				} else if (hflag > 0) {
 					prthumanval(p->fts_bignum);
 					(void)printf("\t%s\n", p->fts_path);
 				} else {
 					(void)printf("%jd\t%s\n",
-					    (intmax_t)(bflag ? p->fts_bignum :
-						howmany(p->fts_bignum * cblocksize, blocksize)),
+					    (intmax_t)howmany(p->fts_bignum * cblocksize, blocksize),
 					    p->fts_path);
 				}
 			}
@@ -332,13 +334,15 @@ main(int argc, char *argv[])
 			curblocks = howmany(curbytes, cblocksize);
 
 			if (aflag || p->fts_level == 0) {
-				if (hflag > 0 && !bflag) {
+				if (bflag) {
+					(void)printf("%jd\t%s\n",
+						(intmax_t) curbytes, p->fts_path);
+				} else if (hflag > 0) {
 					prthumanval(curblocks);
 					(void)printf("\t%s\n", p->fts_path);
 				} else {
 					(void)printf("%jd\t%s\n",
-					    (intmax_t)(bflag ? curbytes :
-						howmany(curblocks * cblocksize, blocksize)),
+					    (intmax_t)howmany(curblocks * cblocksize, blocksize),
 					    p->fts_path);
 				}
 			}
