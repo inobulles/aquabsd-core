@@ -518,6 +518,21 @@ SYSCTL_INT(_hw_cxgbe, OID_AUTO, fec, CTLFLAG_RDTUN, &t4_fec, 0,
     "Forward Error Correction (bit 0 = RS, bit 1 = BASER_RS)");
 
 /*
+ * Controls when the driver sets the FORCE_FEC bit in the L1_CFG32 that it
+ * issues to the firmware.  If the firmware doesn't support FORCE_FEC then the
+ * driver runs as if this is set to 0.
+ * -1 to set FORCE_FEC iff requested_fec != AUTO. Multiple FEC bits are okay.
+ *  0 to never set FORCE_FEC. requested_fec = AUTO means use the hint from the
+ *    transceiver. Multiple FEC bits may not be okay but will be passed on to
+ *    the firmware anyway (may result in l1cfg errors with old firmwares).
+ *  1 to always set FORCE_FEC. Multiple FEC bits are okay. requested_fec = AUTO
+ *    means set all FEC bits that are valid for the speed.
+ */
+static int t4_force_fec = -1;
+SYSCTL_INT(_hw_cxgbe, OID_AUTO, force_fec, CTLFLAG_RDTUN, &t4_force_fec, 0,
+    "Controls the use of FORCE_FEC bit in L1 configuration.");
+
+/*
  * Link autonegotiation.
  * -1 to run with the firmware default.
  *  0 to disable.
@@ -771,9 +786,11 @@ static int sysctl_holdoff_pktc_idx(SYSCTL_HANDLER_ARGS);
 static int sysctl_qsize_rxq(SYSCTL_HANDLER_ARGS);
 static int sysctl_qsize_txq(SYSCTL_HANDLER_ARGS);
 static int sysctl_pause_settings(SYSCTL_HANDLER_ARGS);
-static int sysctl_fec(SYSCTL_HANDLER_ARGS);
+static int sysctl_link_fec(SYSCTL_HANDLER_ARGS);
+static int sysctl_requested_fec(SYSCTL_HANDLER_ARGS);
 static int sysctl_module_fec(SYSCTL_HANDLER_ARGS);
 static int sysctl_autoneg(SYSCTL_HANDLER_ARGS);
+static int sysctl_force_fec(SYSCTL_HANDLER_ARGS);
 static int sysctl_handle_t4_reg64(SYSCTL_HANDLER_ARGS);
 static int sysctl_temperature(SYSCTL_HANDLER_ARGS);
 static int sysctl_vdd(SYSCTL_HANDLER_ARGS);
@@ -5702,7 +5719,9 @@ init_link_config(struct port_info *pi)
 	struct link_config *lc = &pi->link_cfg;
 
 	PORT_LOCK_ASSERT_OWNED(pi);
+	MPASS(lc->pcaps != 0);
 
+	lc->requested_caps = 0;
 	lc->requested_speed = 0;
 
 	if (t4_autoneg == 0)
@@ -5725,6 +5744,13 @@ init_link_config(struct port_info *pi)
 		    (FEC_RS | FEC_BASER_RS | FEC_NONE | FEC_MODULE);
 		if (lc->requested_fec == 0)
 			lc->requested_fec = FEC_AUTO;
+	}
+	lc->force_fec = 0;
+	if (lc->pcaps & FW_PORT_CAP32_FORCE_FEC) {
+		if (t4_force_fec < 0)
+			lc->force_fec = -1;
+		else if (t4_force_fec > 0)
+			lc->force_fec = 1;
 	}
 }
 
@@ -7758,9 +7784,12 @@ cxgbe_sysctls(struct port_info *pi)
 	    CTLTYPE_STRING | CTLFLAG_RW | CTLFLAG_MPSAFE, pi, 0,
 	    sysctl_pause_settings, "A",
 	    "PAUSE settings (bit 0 = rx_pause, 1 = tx_pause, 2 = pause_autoneg)");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "fec",
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "link_fec",
+	    CTLTYPE_STRING | CTLFLAG_MPSAFE, pi, 0, sysctl_link_fec, "A",
+	    "FEC in use on the link");
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "requested_fec",
 	    CTLTYPE_STRING | CTLFLAG_RW | CTLFLAG_MPSAFE, pi, 0,
-	    sysctl_fec, "A",
+	    sysctl_requested_fec, "A",
 	    "FECs to use (bit 0 = RS, 1 = FC, 2 = none, 5 = auto, 6 = module)");
 	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "module_fec",
 	    CTLTYPE_STRING | CTLFLAG_MPSAFE, pi, 0, sysctl_module_fec, "A",
@@ -7769,7 +7798,12 @@ cxgbe_sysctls(struct port_info *pi)
 	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, pi, 0,
 	    sysctl_autoneg, "I",
 	    "autonegotiation (-1 = not supported)");
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "force_fec",
+	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, pi, 0,
+	    sysctl_force_fec, "I", "when to use FORCE_FEC bit for link config");
 
+	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "rcaps", CTLFLAG_RD,
+	    &pi->link_cfg.requested_caps, 0, "L1 config requested by driver");
 	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "pcaps", CTLFLAG_RD,
 	    &pi->link_cfg.pcaps, 0, "port capabilities");
 	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "acaps", CTLFLAG_RD,
@@ -8278,7 +8312,33 @@ sysctl_pause_settings(SYSCTL_HANDLER_ARGS)
 }
 
 static int
-sysctl_fec(SYSCTL_HANDLER_ARGS)
+sysctl_link_fec(SYSCTL_HANDLER_ARGS)
+{
+	struct port_info *pi = arg1;
+	struct link_config *lc = &pi->link_cfg;
+	int rc;
+	struct sbuf *sb;
+	static char *bits = "\20\1RS-FEC\2FC-FEC\3NO-FEC\4RSVD1\5RSVD2";
+
+	rc = sysctl_wire_old_buffer(req, 0);
+	if (rc != 0)
+		return(rc);
+
+	sb = sbuf_new_for_sysctl(NULL, NULL, 128, req);
+	if (sb == NULL)
+		return (ENOMEM);
+	if (lc->link_ok)
+		sbuf_printf(sb, "%b", lc->fec, bits);
+	else
+		sbuf_printf(sb, "no link");
+	rc = sbuf_finish(sb);
+	sbuf_delete(sb);
+
+	return (rc);
+}
+
+static int
+sysctl_requested_fec(SYSCTL_HANDLER_ARGS)
 {
 	struct port_info *pi = arg1;
 	struct adapter *sc = pi->adapter;
@@ -8299,17 +8359,7 @@ sysctl_fec(SYSCTL_HANDLER_ARGS)
 		if (sb == NULL)
 			return (ENOMEM);
 
-		/*
-		 * Display the requested_fec when the link is down -- the actual
-		 * FEC makes sense only when the link is up.
-		 */
-		if (lc->link_ok) {
-			sbuf_printf(sb, "%b", (lc->fec & M_FW_PORT_CAP32_FEC) |
-			    (lc->requested_fec & (FEC_AUTO | FEC_MODULE)),
-			    bits);
-		} else {
-			sbuf_printf(sb, "%b", lc->requested_fec, bits);
-		}
+		sbuf_printf(sb, "%b", lc->requested_fec, bits);
 		rc = sbuf_finish(sb);
 		sbuf_delete(sb);
 	} else {
@@ -8331,7 +8381,7 @@ sysctl_fec(SYSCTL_HANDLER_ARGS)
 			return (EINVAL);/* some other bit is set too */
 
 		rc = begin_synchronized_op(sc, &pi->vi[0], SLEEP_OK | INTR_OK,
-		    "t4fec");
+		    "t4reqf");
 		if (rc)
 			return (rc);
 		PORT_LOCK(pi);
@@ -8464,6 +8514,39 @@ sysctl_autoneg(SYSCTL_HANDLER_ARGS)
 		set_current_media(pi);
 	}
 done:
+	PORT_UNLOCK(pi);
+	end_synchronized_op(sc, 0);
+	return (rc);
+}
+
+static int
+sysctl_force_fec(SYSCTL_HANDLER_ARGS)
+{
+	struct port_info *pi = arg1;
+	struct adapter *sc = pi->adapter;
+	struct link_config *lc = &pi->link_cfg;
+	int rc, val;
+
+	val = lc->force_fec;
+	MPASS(val >= -1 && val <= 1);
+	rc = sysctl_handle_int(oidp, &val, 0, req);
+	if (rc != 0 || req->newptr == NULL)
+		return (rc);
+	if (!(lc->pcaps & FW_PORT_CAP32_FORCE_FEC))
+		return (ENOTSUP);
+	if (val < -1 || val > 1)
+		return (EINVAL);
+
+	rc = begin_synchronized_op(sc, &pi->vi[0], SLEEP_OK | INTR_OK, "t4ff");
+	if (rc)
+		return (rc);
+	PORT_LOCK(pi);
+	lc->force_fec = val;
+	if (!hw_off_limits(sc)) {
+		fixup_link_config(pi);
+		if (pi->up_vis > 0)
+			rc = apply_link_config(pi);
+	}
 	PORT_UNLOCK(pi);
 	end_synchronized_op(sc, 0);
 	return (rc);

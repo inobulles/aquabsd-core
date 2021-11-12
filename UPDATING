@@ -27,6 +27,19 @@ NOTE TO PEOPLE WHO THINK THAT FreeBSD 14.x IS SLOW:
 	world, or to merely disable the most expensive debugging functionality
 	at runtime, run "ln -s 'abort:false,junk:false' /etc/malloc.conf".)
 
+20211110:
+	Commit b8d60729deef changed the TCP congestion control framework so
+	that any of the included congestion control modules could be
+	the single module built into the kernel. Previously newreno
+	was automatically built in through direct reference. Has of
+	this commit you are required to declare at least one congestion
+	control module (e.g. 'options CC_NEWRENO') and to also delcare a 
+	default using the CC_DEFAULT option (e.g. options CC_DEFAULT="newreno\").
+	The GENERIC configuation includes CC_NEWRENO and defines newreno
+	as the default. If no congestion control option is built into the
+	kernel and you are including networking, the kernel compile will
+	fail. Also if no default is declared the kernel compile will fail.
+
 20211106:
 	Commit f0c9847a6c47 changed the arguments for VOP_ALLOCATE.
 	The NFS modules must be rebuilt from sources and any out
@@ -2463,9 +2476,9 @@ COMMON ITEMS:
 	make installkernel KERNCONF=YOUR_KERNEL_HERE
 							[1]
 	<reboot in single user>				[3]
-	mergemaster -Fp					[5]
+	etcupdate -p					[5]
 	make installworld
-	mergemaster -Fi					[4]
+	etcupdate -B					[4]
 	make delete-old					[6]
 	<reboot>
 
@@ -2501,9 +2514,9 @@ COMMON ITEMS:
 	make installkernel KERNCONF=YOUR_KERNEL_HERE
 							[1]
 	<reboot in single user>				[3]
-	mergemaster -Fp					[5]
+	etcupdate -p					[5]
 	make installworld
-	mergemaster -Fi					[4]
+	etcupdate -B					[4]
 	make delete-old					[6]
 	<reboot>
 
@@ -2545,15 +2558,11 @@ COMMON ITEMS:
 	system.  Attempting to do it by hand is not recommended and those
 	that pursue this avenue should read this file carefully, as well
 	as the archives of freebsd-current and freebsd-hackers mailing lists
-	for potential gotchas.  The -U option is also useful to consider.
-	See mergemaster(8) for more information.
+	for potential gotchas.  See etcupdate(8) for more information.
 
 	[5] Usually this step is a no-op.  However, from time to time
 	you may need to do this if you get unknown user in the following
-	step.  It never hurts to do it all the time.  You may need to
-	install a new mergemaster (cd src/usr.sbin/mergemaster && make
-	install) after the buildworld before this step if you last updated
-	from current before 20130425 or from -stable before 20130430.
+	step.
 
 	[6] This only deletes old files and directories. Old libraries
 	can be deleted by "make delete-old-libs", but you have to make
