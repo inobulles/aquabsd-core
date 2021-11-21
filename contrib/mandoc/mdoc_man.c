@@ -262,11 +262,8 @@ static const struct mdoc_man_act mdoc_man_acts[MDOC_MAX - MDOC_Dd] = {
 	{ NULL, NULL, post_percent, NULL, NULL }, /* %Q */
 	{ NULL, NULL, post_percent, NULL, NULL }, /* %U */
 	{ NULL, NULL, NULL, NULL, NULL }, /* Ta */
-<<<<<<< HEAD
 	{ NULL, pre_bk, post_bk, NULL, NULL }, /* Ax */
-=======
 	{ NULL, pre_skip, NULL, NULL, NULL }, /* Tg */
->>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 static const struct mdoc_man_act *mdoc_man_act(enum roff_tok);
 

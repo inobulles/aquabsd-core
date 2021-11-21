@@ -246,11 +246,8 @@ static	const v_post mdoc_valids[MDOC_MAX - MDOC_Dd] = {
 	NULL,		/* %Q */
 	NULL,		/* %U */
 	NULL,		/* Ta */
-<<<<<<< HEAD
 	post_xx,	/* Ax */
-=======
 	post_tg,	/* Tg */
->>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 
 #define	RSORD_MAX 14 /* Number of `Rs' blocks. */

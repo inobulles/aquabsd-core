@@ -241,11 +241,8 @@ static const struct mdoc_term_act mdoc_term_acts[MDOC_MAX - MDOC_Dd] = {
 	{ NULL, termp____post }, /* %Q */
 	{ NULL, termp____post }, /* %U */
 	{ NULL, NULL }, /* Ta */
-<<<<<<< HEAD
 	{ termp_xx_pre, termp_xx_post }, /* Ax */
-=======
 	{ termp_skip_pre, NULL }, /* Tg */
->>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 
 
