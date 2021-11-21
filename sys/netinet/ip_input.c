@@ -118,24 +118,17 @@ SYSCTL_INT(_net_inet_ip, IPCTL_SENDREDIRECTS, redirect, CTLFLAG_VNET | CTLFLAG_R
     &VNET_NAME(ipsendredirects), 0,
     "Enable sending IP redirects");
 
-/*
- * XXX - Setting ip_checkinterface mostly implements the receive side of
- * the Strong ES model described in RFC 1122, but since the routing table
- * and transmit implementation do not implement the Strong ES model,
- * setting this to 1 results in an odd hybrid.
- *
- * XXX - ip_checkinterface currently must be disabled if you use ipnat
- * to translate the destination address to another local interface.
- *
- * XXX - ip_checkinterface must be disabled if you add IP aliases
- * to the loopback interface instead of the interface where the
- * packets for those addresses are received.
- */
-VNET_DEFINE_STATIC(int, ip_checkinterface);
-#define	V_ip_checkinterface	VNET(ip_checkinterface)
-SYSCTL_INT(_net_inet_ip, OID_AUTO, check_interface, CTLFLAG_VNET | CTLFLAG_RW,
-    &VNET_NAME(ip_checkinterface), 0,
-    "Verify packet arrives on correct interface");
+VNET_DEFINE_STATIC(bool, ip_strong_es) = false;
+#define	V_ip_strong_es	VNET(ip_strong_es)
+SYSCTL_BOOL(_net_inet_ip, OID_AUTO, rfc1122_strong_es,
+    CTLFLAG_VNET | CTLFLAG_RW, &VNET_NAME(ip_strong_es), false,
+    "Packet's IP destination address must match address on arrival interface");
+
+VNET_DEFINE_STATIC(bool, ip_sav) = true;
+#define	V_ip_sav	VNET(ip_sav)
+SYSCTL_BOOL(_net_inet_ip, OID_AUTO, source_address_validation,
+    CTLFLAG_VNET | CTLFLAG_RW, &VNET_NAME(ip_sav), true,
+    "Drop incoming packets with source address that is a local address");
 
 VNET_DEFINE(pfil_head_t, inet_pfil_head);	/* Packet filter hooks */
 
@@ -457,10 +450,11 @@ ip_input(struct mbuf *m)
 	struct in_ifaddr *ia = NULL;
 	struct ifaddr *ifa;
 	struct ifnet *ifp;
-	int    checkif, hlen = 0;
+	int hlen = 0;
 	uint16_t sum, ip_len;
 	int dchg = 0;				/* dest changed after fw */
 	struct in_addr odst;			/* original dst address */
+	bool strong_es;
 
 	M_ASSERTPKTHDR(m);
 	NET_EPOCH_ASSERT();
@@ -476,28 +470,31 @@ ip_input(struct mbuf *m)
 
 	IPSTAT_INC(ips_total);
 
-	if (m->m_pkthdr.len < sizeof(struct ip))
+	if (__predict_false(m->m_pkthdr.len < sizeof(struct ip)))
 		goto tooshort;
 
-	if (m->m_len < sizeof (struct ip) &&
-	    (m = m_pullup(m, sizeof (struct ip))) == NULL) {
-		IPSTAT_INC(ips_toosmall);
-		return;
+	if (m->m_len < sizeof(struct ip)) {
+		m = m_pullup(m, sizeof(struct ip));
+		if (__predict_false(m == NULL)) {
+			IPSTAT_INC(ips_toosmall);
+			return;
+		}
 	}
 	ip = mtod(m, struct ip *);
 
-	if (ip->ip_v != IPVERSION) {
+	if (__predict_false(ip->ip_v != IPVERSION)) {
 		IPSTAT_INC(ips_badvers);
 		goto bad;
 	}
 
 	hlen = ip->ip_hl << 2;
-	if (hlen < sizeof(struct ip)) {	/* minimum header length */
+	if (__predict_false(hlen < sizeof(struct ip))) {	/* minimum header length */
 		IPSTAT_INC(ips_badhlen);
 		goto bad;
 	}
 	if (hlen > m->m_len) {
-		if ((m = m_pullup(m, hlen)) == NULL) {
+		m = m_pullup(m, hlen);
+		if (__predict_false(m == NULL)) {
 			IPSTAT_INC(ips_badhlen);
 			return;
 		}
@@ -525,7 +522,7 @@ ip_input(struct mbuf *m)
 			sum = in_cksum(m, hlen);
 		}
 	}
-	if (sum) {
+	if (__predict_false(sum)) {
 		IPSTAT_INC(ips_badsum);
 		goto bad;
 	}
@@ -537,7 +534,7 @@ ip_input(struct mbuf *m)
 #endif
 
 	ip_len = ntohs(ip->ip_len);
-	if (ip_len < hlen) {
+	if (__predict_false(ip_len < hlen)) {
 		IPSTAT_INC(ips_badlen);
 		goto bad;
 	}
@@ -548,7 +545,7 @@ ip_input(struct mbuf *m)
 	 * Trim mbufs if longer than we expect.
 	 * Drop packet if shorter than we expect.
 	 */
-	if (m->m_pkthdr.len < ip_len) {
+	if (__predict_false(m->m_pkthdr.len < ip_len)) {
 tooshort:
 		IPSTAT_INC(ips_tooshort);
 		goto bad;
@@ -616,7 +613,6 @@ tooshort:
 
 	ip = mtod(m, struct ip *);
 	dchg = (odst.s_addr != ip->ip_dst.s_addr);
-	ifp = m->m_pkthdr.rcvif;
 
 	if (m->m_flags & M_FASTFWD_OURS) {
 		m->m_flags &= ~M_FASTFWD_OURS;
@@ -650,7 +646,7 @@ passin:
          * anywhere else. Also checks if the rsvp daemon is running before
 	 * grabbing the packet.
          */
-	if (V_rsvp_on && ip->ip_p==IPPROTO_RSVP)
+	if (ip->ip_p == IPPROTO_RSVP && V_rsvp_on)
 		goto ours;
 
 	/*
@@ -666,41 +662,46 @@ passin:
 	/*
 	 * Enable a consistency check between the destination address
 	 * and the arrival interface for a unicast packet (the RFC 1122
-	 * strong ES model) if IP forwarding is disabled and the packet
-	 * is not locally generated and the packet is not subject to
-	 * 'ipfw fwd'.
-	 *
-	 * XXX - Checking also should be disabled if the destination
-	 * address is ipnat'ed to a different interface.
-	 *
-	 * XXX - Checking is incompatible with IP aliases added
-	 * to the loopback interface instead of the interface where
-	 * the packets are received.
-	 *
-	 * XXX - This is the case for carp vhost IPs as well so we
-	 * insert a workaround. If the packet got here, we already
-	 * checked with carp_iamatch() and carp_forus().
+	 * strong ES model) with a list of additional predicates:
+	 * - if IP forwarding is disabled
+	 * - the packet is not locally generated
+	 * - the packet is not subject to 'ipfw fwd'
+	 * - Interface is not running CARP. If the packet got here, we already
+	 *   checked it with carp_iamatch() and carp_forus().
 	 */
-	checkif = V_ip_checkinterface && (V_ipforwarding == 0) &&
-	    ifp != NULL && ((ifp->if_flags & IFF_LOOPBACK) == 0) &&
+	strong_es = V_ip_strong_es && (V_ipforwarding == 0) &&
+	    ((ifp->if_flags & IFF_LOOPBACK) == 0) &&
 	    ifp->if_carp == NULL && (dchg == 0);
 
 	/*
 	 * Check for exact addresses in the hash bucket.
 	 */
 	CK_LIST_FOREACH(ia, INADDR_HASH(ip->ip_dst.s_addr), ia_hash) {
+		if (IA_SIN(ia)->sin_addr.s_addr != ip->ip_dst.s_addr)
+			continue;
+
 		/*
-		 * If the address matches, verify that the packet
-		 * arrived via the correct interface if checking is
-		 * enabled.
+		 * net.inet.ip.rfc1122_strong_es: the address matches, verify
+		 * that the packet arrived via the correct interface.
 		 */
-		if (IA_SIN(ia)->sin_addr.s_addr == ip->ip_dst.s_addr &&
-		    (!checkif || ia->ia_ifp == ifp)) {
-			counter_u64_add(ia->ia_ifa.ifa_ipackets, 1);
-			counter_u64_add(ia->ia_ifa.ifa_ibytes,
-			    m->m_pkthdr.len);
-			goto ours;
+		if (__predict_false(strong_es && ia->ia_ifp != ifp)) {
+			IPSTAT_INC(ips_badaddr);
+			goto bad;
 		}
+
+		/*
+		 * net.inet.ip.source_address_validation: drop incoming
+		 * packets that pretend to be ours.
+		 */
+		if (V_ip_sav && !(ifp->if_flags & IFF_LOOPBACK) &&
+		    __predict_false(in_localip_fib(ip->ip_src, ifp->if_fib))) {
+			IPSTAT_INC(ips_badaddr);
+			goto bad;
+		}
+
+		counter_u64_add(ia->ia_ifa.ifa_ipackets, 1);
+		counter_u64_add(ia->ia_ifa.ifa_ibytes, m->m_pkthdr.len);
+		goto ours;
 	}
 
 	/*
@@ -711,7 +712,7 @@ passin:
 	 * be handled via ip_forward() and ether_output() with the loopback
 	 * into the stack for SIMPLEX interfaces handled by ether_output().
 	 */
-	if (ifp != NULL && ifp->if_flags & IFF_BROADCAST) {
+	if (ifp->if_flags & IFF_BROADCAST) {
 		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			if (ifa->ifa_addr->sa_family != AF_INET)
 				continue;

@@ -66,7 +66,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/protosw.h>
 #include <sys/proc.h>
 #include <sys/jail.h>
-#include <sys/syslog.h>
 #include <sys/stats.h>
 
 #ifdef DDB
@@ -262,26 +261,10 @@ tcp_usr_detach(struct socket *so)
 		 *  In all three cases the tcptw should not be freed here.
 		 */
 		if (inp->inp_flags & INP_DROPPED) {
+			KASSERT(tp == NULL, ("tcp_detach: INP_TIMEWAIT && "
+			    "INP_DROPPED && tp != NULL"));
 			in_pcbdetach(inp);
-			if (__predict_true(tp == NULL)) {
-				in_pcbfree(inp);
-			} else {
-				/*
-				 * This case should not happen as in TIMEWAIT
-				 * state the inp should not be destroyed before
-				 * its tcptw.  If INVARIANTS is defined, panic.
-				 */
-#ifdef INVARIANTS
-				panic("%s: Panic before an inp double-free: "
-				    "INP_TIMEWAIT && INP_DROPPED && tp != NULL"
-				    , __func__);
-#else
-				log(LOG_ERR, "%s: Avoid an inp double-free: "
-				    "INP_TIMEWAIT && INP_DROPPED && tp != NULL"
-				    , __func__);
-#endif
-				INP_WUNLOCK(inp);
-			}
+			in_pcbfree(inp);
 		} else {
 			in_pcbdetach(inp);
 			INP_WUNLOCK(inp);
@@ -2073,11 +2056,16 @@ no_mem_needed:
 			free(ptr, M_CC_MEM);
 		goto do_over;
 	}
-	if (ptr)  {
+	INP_WLOCK(inp);
+	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
+		INP_WUNLOCK(inp);
+		CC_LIST_RUNLOCK();
+		free(ptr, M_CC_MEM);
+		return (ECONNRESET);
+	}
+	tp = intotcpcb(inp);
+	if (ptr != NULL)
 		memset(ptr, 0, mem_sz);
-		INP_WLOCK_RECHECK_CLEANUP(inp, free(ptr, M_CC_MEM));
-	} else
-		INP_WLOCK_RECHECK(inp);
 	CC_LIST_RUNLOCK();
 	cc_mem.ccvc.tcp = tp;
 	/*
