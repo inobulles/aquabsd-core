@@ -236,11 +236,7 @@ static const struct mdoc_html_act mdoc_html_acts[MDOC_MAX - MDOC_Dd] = {
 	{mdoc__x_pre, mdoc__x_post}, /* %Q */
 	{mdoc__x_pre, mdoc__x_post}, /* %U */
 	{NULL, NULL}, /* Ta */
-<<<<<<< HEAD
 	{mdoc_xx_pre, NULL}, /* Ax */
-=======
-	{mdoc_tg_pre, NULL}, /* Tg */
->>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 
 

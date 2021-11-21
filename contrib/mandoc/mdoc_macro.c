@@ -200,11 +200,8 @@ static const struct mdoc_macro mdoc_macros[MDOC_MAX - MDOC_Dd] = {
 	{ in_line_eoln, MDOC_JOIN }, /* %Q */
 	{ in_line_eoln, 0 }, /* %U */
 	{ phrase_ta, MDOC_CALLABLE | MDOC_PARSED | MDOC_JOIN }, /* Ta */
-<<<<<<< HEAD
 	{ in_line_argn, MDOC_CALLABLE | MDOC_PARSED }, /* Ax */
-=======
 	{ in_line_eoln, 0 }, /* Tg */
->>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 
 
