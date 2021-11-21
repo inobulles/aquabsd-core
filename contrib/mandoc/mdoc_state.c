@@ -1,4 +1,4 @@
-/*	$Id: mdoc_state.c,v 1.15 2019/01/01 07:42:04 schwarze Exp $ */
+/* $Id: mdoc_state.c,v 1.17 2020/06/22 19:20:40 schwarze Exp $ */
 /*
  * Copyright (c) 2014, 2015, 2017 Ingo Schwarze <schwarze@openbsd.org>
  *
@@ -14,6 +14,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#include "config.h"
+
 #include <sys/types.h>
 
 #include <assert.h>
@@ -157,7 +159,11 @@ static	const state_handler state_handlers[MDOC_MAX - MDOC_Dd] = {
 	NULL,		/* %Q */
 	NULL,		/* %U */
 	NULL,		/* Ta */
+<<<<<<< HEAD
 	NULL,		/* Ax */
+=======
+	NULL,		/* Tg */
+>>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 
 

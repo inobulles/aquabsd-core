@@ -1,7 +1,7 @@
-/*	$Id: mdoc_html.c,v 1.328 2019/03/01 10:57:18 schwarze Exp $ */
+/* $Id: mdoc_html.c,v 1.342 2021/03/30 19:26:20 schwarze Exp $ */
 /*
+ * Copyright (c) 2014-2021 Ingo Schwarze <schwarze@openbsd.org>
  * Copyright (c) 2008-2011, 2014 Kristaps Dzonsons <kristaps@bsd.lv>
- * Copyright (c) 2014-2019 Ingo Schwarze <schwarze@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +14,8 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * HTML formatter for mdoc(7) used by mandoc(1).
  */
 #include "config.h"
 
@@ -47,13 +49,11 @@ struct	mdoc_html_act {
 	void		(*post)(MDOC_ARGS);
 };
 
-static	char		 *cond_id(const struct roff_node *);
 static	void		  print_mdoc_head(const struct roff_meta *,
 				struct html *);
 static	void		  print_mdoc_node(MDOC_ARGS);
 static	void		  print_mdoc_nodelist(MDOC_ARGS);
-static	void		  synopsis_pre(struct html *,
-				const struct roff_node *);
+static	void		  synopsis_pre(struct html *, struct roff_node *);
 
 static	void		  mdoc_root_post(const struct roff_meta *,
 				struct html *);
@@ -73,9 +73,8 @@ static	void		  mdoc_bk_post(MDOC_ARGS);
 static	int		  mdoc_bk_pre(MDOC_ARGS);
 static	int		  mdoc_bl_pre(MDOC_ARGS);
 static	int		  mdoc_cd_pre(MDOC_ARGS);
-static	int		  mdoc_cm_pre(MDOC_ARGS);
+static	int		  mdoc_code_pre(MDOC_ARGS);
 static	int		  mdoc_d1_pre(MDOC_ARGS);
-static	int		  mdoc_dv_pre(MDOC_ARGS);
 static	int		  mdoc_fa_pre(MDOC_ARGS);
 static	int		  mdoc_fd_pre(MDOC_ARGS);
 static	int		  mdoc_fl_pre(MDOC_ARGS);
@@ -84,20 +83,15 @@ static	int		  mdoc_ft_pre(MDOC_ARGS);
 static	int		  mdoc_em_pre(MDOC_ARGS);
 static	void		  mdoc_eo_post(MDOC_ARGS);
 static	int		  mdoc_eo_pre(MDOC_ARGS);
-static	int		  mdoc_er_pre(MDOC_ARGS);
-static	int		  mdoc_ev_pre(MDOC_ARGS);
 static	int		  mdoc_ex_pre(MDOC_ARGS);
 static	void		  mdoc_fo_post(MDOC_ARGS);
 static	int		  mdoc_fo_pre(MDOC_ARGS);
-static	int		  mdoc_ic_pre(MDOC_ARGS);
 static	int		  mdoc_igndelim_pre(MDOC_ARGS);
 static	int		  mdoc_in_pre(MDOC_ARGS);
 static	int		  mdoc_it_pre(MDOC_ARGS);
 static	int		  mdoc_lb_pre(MDOC_ARGS);
-static	int		  mdoc_li_pre(MDOC_ARGS);
 static	int		  mdoc_lk_pre(MDOC_ARGS);
 static	int		  mdoc_mt_pre(MDOC_ARGS);
-static	int		  mdoc_ms_pre(MDOC_ARGS);
 static	int		  mdoc_nd_pre(MDOC_ARGS);
 static	int		  mdoc_nm_pre(MDOC_ARGS);
 static	int		  mdoc_no_pre(MDOC_ARGS);
@@ -115,6 +109,7 @@ static	int		  mdoc_ss_pre(MDOC_ARGS);
 static	int		  mdoc_st_pre(MDOC_ARGS);
 static	int		  mdoc_sx_pre(MDOC_ARGS);
 static	int		  mdoc_sy_pre(MDOC_ARGS);
+static	int		  mdoc_tg_pre(MDOC_ARGS);
 static	int		  mdoc_va_pre(MDOC_ARGS);
 static	int		  mdoc_vt_pre(MDOC_ARGS);
 static	int		  mdoc_xr_pre(MDOC_ARGS);
@@ -139,19 +134,19 @@ static const struct mdoc_html_act mdoc_html_acts[MDOC_MAX - MDOC_Dd] = {
 	{mdoc_ap_pre, NULL}, /* Ap */
 	{mdoc_ar_pre, NULL}, /* Ar */
 	{mdoc_cd_pre, NULL}, /* Cd */
-	{mdoc_cm_pre, NULL}, /* Cm */
-	{mdoc_dv_pre, NULL}, /* Dv */
-	{mdoc_er_pre, NULL}, /* Er */
-	{mdoc_ev_pre, NULL}, /* Ev */
+	{mdoc_code_pre, NULL}, /* Cm */
+	{mdoc_code_pre, NULL}, /* Dv */
+	{mdoc_code_pre, NULL}, /* Er */
+	{mdoc_code_pre, NULL}, /* Ev */
 	{mdoc_ex_pre, NULL}, /* Ex */
 	{mdoc_fa_pre, NULL}, /* Fa */
 	{mdoc_fd_pre, NULL}, /* Fd */
 	{mdoc_fl_pre, NULL}, /* Fl */
 	{mdoc_fn_pre, NULL}, /* Fn */
 	{mdoc_ft_pre, NULL}, /* Ft */
-	{mdoc_ic_pre, NULL}, /* Ic */
+	{mdoc_code_pre, NULL}, /* Ic */
 	{mdoc_in_pre, NULL}, /* In */
-	{mdoc_li_pre, NULL}, /* Li */
+	{mdoc_code_pre, NULL}, /* Li */
 	{mdoc_nd_pre, NULL}, /* Nd */
 	{mdoc_nm_pre, NULL}, /* Nm */
 	{mdoc_quote_pre, mdoc_quote_post}, /* Op */
@@ -192,7 +187,7 @@ static const struct mdoc_html_act mdoc_html_acts[MDOC_MAX - MDOC_Dd] = {
 	{mdoc_em_pre, NULL}, /* Em */
 	{mdoc_eo_pre, mdoc_eo_post}, /* Eo */
 	{mdoc_xx_pre, NULL}, /* Fx */
-	{mdoc_ms_pre, NULL}, /* Ms */
+	{mdoc_no_pre, NULL}, /* Ms */
 	{mdoc_no_pre, NULL}, /* No */
 	{mdoc_ns_pre, NULL}, /* Ns */
 	{mdoc_xx_pre, NULL}, /* Nx */
@@ -241,7 +236,11 @@ static const struct mdoc_html_act mdoc_html_acts[MDOC_MAX - MDOC_Dd] = {
 	{mdoc__x_pre, mdoc__x_post}, /* %Q */
 	{mdoc__x_pre, mdoc__x_post}, /* %U */
 	{NULL, NULL}, /* Ta */
+<<<<<<< HEAD
 	{mdoc_xx_pre, NULL}, /* Ax */
+=======
+	{mdoc_tg_pre, NULL}, /* Tg */
+>>>>>>> 8ec4c5dae32765701ac70811455084efd1570c32
 };
 
 
@@ -249,13 +248,15 @@ static const struct mdoc_html_act mdoc_html_acts[MDOC_MAX - MDOC_Dd] = {
  * See the same function in mdoc_term.c for documentation.
  */
 static void
-synopsis_pre(struct html *h, const struct roff_node *n)
+synopsis_pre(struct html *h, struct roff_node *n)
 {
+	struct roff_node *np;
 
-	if (NULL == n->prev || ! (NODE_SYNPRETTY & n->flags))
+	if ((n->flags & NODE_SYNPRETTY) == 0 ||
+	    (np = roff_node_prev(n)) == NULL)
 		return;
 
-	if (n->prev->tok == n->tok &&
+	if (np->tok == n->tok &&
 	    MDOC_Fo != n->tok &&
 	    MDOC_Ft != n->tok &&
 	    MDOC_Fn != n->tok) {
@@ -263,7 +264,7 @@ synopsis_pre(struct html *h, const struct roff_node *n)
 		return;
 	}
 
-	switch (n->prev->tok) {
+	switch (np->tok) {
 	case MDOC_Fd:
 	case MDOC_Fn:
 	case MDOC_Fo:
@@ -352,30 +353,40 @@ print_mdoc_node(MDOC_ARGS)
 	if (n->type == ROFFT_COMMENT || n->flags & NODE_NOPRT)
 		return;
 
-	html_fillmode(h, n->flags & NODE_NOFILL ? ROFF_nf : ROFF_fi);
+	if ((n->flags & NODE_NOFILL) == 0)
+		html_fillmode(h, ROFF_fi);
+	else if (html_fillmode(h, ROFF_nf) == ROFF_nf &&
+	    n->tok != ROFF_fi && n->flags & NODE_LINE)
+		print_endline(h);
 
 	child = 1;
 	n->flags &= ~NODE_ENDED;
 	switch (n->type) {
 	case ROFFT_TEXT:
+		if (n->flags & NODE_LINE) {
+			switch (*n->string) {
+			case '\0':
+				h->col = 1;
+				print_endline(h);
+				return;
+			case ' ':
+				if ((h->flags & HTML_NONEWLINE) == 0 &&
+				    (n->flags & NODE_NOFILL) == 0)
+					print_otag(h, TAG_BR, "");
+				break;
+			default:
+				break;
+			}
+		}
 		t = h->tag;
 		t->refcnt++;
-
-		/* No tables in this mode... */
-		assert(NULL == h->tblt);
-
-		/*
-		 * Make sure that if we're in a literal mode already
-		 * (i.e., within a <PRE>) don't print the newline.
-		 */
-		if (*n->string == ' ' && n->flags & NODE_LINE &&
-		    (h->flags & HTML_NONEWLINE) == 0 &&
-		    (n->flags & NODE_NOFILL) == 0)
-			print_otag(h, TAG_BR, "");
-		if (NODE_DELIMC & n->flags)
+		if (n->flags & NODE_DELIMC)
 			h->flags |= HTML_NOSPACE;
-		print_text(h, n->string);
-		if (NODE_DELIMO & n->flags)
+		if (n->flags & NODE_HREF)
+			print_tagged_text(h, n->string, n);
+		else
+			print_text(h, n->string);
+		if (n->flags & NODE_DELIMO)
 			h->flags |= HTML_NOSPACE;
 		break;
 	case ROFFT_EQN:
@@ -440,12 +451,6 @@ print_mdoc_node(MDOC_ARGS)
 			n->body->flags |= NODE_ENDED;
 		break;
 	}
-
-	if (n->flags & NODE_NOFILL &&
-	    (n->next == NULL || n->next->flags & NODE_LINE)) {
-		h->col++;
-		print_endline(h);
-	}
 }
 
 static void
@@ -503,20 +508,11 @@ mdoc_root_pre(const struct roff_meta *meta, struct html *h)
 	return 1;
 }
 
-static char *
-cond_id(const struct roff_node *n)
+static int
+mdoc_code_pre(MDOC_ARGS)
 {
-	if (n->child != NULL &&
-	    n->child->type == ROFFT_TEXT &&
-	    (n->prev == NULL ||
-	     (n->prev->type == ROFFT_TEXT &&
-	      strcmp(n->prev->string, "|") == 0)) &&
-	    (n->parent->tok == MDOC_It ||
-	     (n->parent->tok == MDOC_Xo &&
-	      n->parent->parent->prev == NULL &&
-	      n->parent->parent->parent->tok == MDOC_It)))
-		return html_make_id(n, 1);
-	return NULL;
+	print_otag_id(h, TAG_CODE, roff_name[n->tok], n);
+	return 1;
 }
 
 static int
@@ -579,10 +575,7 @@ mdoc_sh_pre(MDOC_ARGS)
 		print_otag(h, TAG_SECTION, "c", "Sh");
 		break;
 	case ROFFT_HEAD:
-		id = html_make_id(n, 1);
-		print_otag(h, TAG_H1, "ci", "Sh", id);
-		if (id != NULL)
-			print_otag(h, TAG_A, "chR", "permalink", id);
+		print_otag_id(h, TAG_H1, "Sh", n);
 		break;
 	case ROFFT_BODY:
 		if (n->sec == SEC_AUTHORS)
@@ -597,55 +590,35 @@ mdoc_sh_pre(MDOC_ARGS)
 static int
 mdoc_ss_pre(MDOC_ARGS)
 {
-	char	*id;
-
 	switch (n->type) {
 	case ROFFT_BLOCK:
 		html_close_paragraph(h);
 		print_otag(h, TAG_SECTION, "c", "Ss");
-		return 1;
+		break;
 	case ROFFT_HEAD:
+		print_otag_id(h, TAG_H2, "Ss", n);
 		break;
 	case ROFFT_BODY:
-		return 1;
+		break;
 	default:
 		abort();
 	}
-
-	id = html_make_id(n, 1);
-	print_otag(h, TAG_H2, "ci", "Ss", id);
-	if (id != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
 	return 1;
 }
 
 static int
 mdoc_fl_pre(MDOC_ARGS)
 {
-	char	*id;
+	struct roff_node	*nn;
 
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Fl", id);
-
+	print_otag_id(h, TAG_CODE, "Fl", n);
 	print_text(h, "\\-");
-	if (!(n->child == NULL &&
-	    (n->next == NULL ||
-	     n->next->type == ROFFT_TEXT ||
-	     n->next->flags & NODE_LINE)))
+	if (n->child != NULL ||
+	    ((nn = roff_node_next(n)) != NULL &&
+	     nn->type != ROFFT_TEXT &&
+	     (nn->flags & NODE_LINE) == 0))
 		h->flags |= HTML_NOSPACE;
 
-	return 1;
-}
-
-static int
-mdoc_cm_pre(MDOC_ARGS)
-{
-	char	*id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Cm", id);
 	return 1;
 }
 
@@ -654,7 +627,6 @@ mdoc_nd_pre(MDOC_ARGS)
 {
 	switch (n->type) {
 	case ROFFT_BLOCK:
-		html_close_paragraph(h);
 		return 1;
 	case ROFFT_HEAD:
 		return 0;
@@ -664,8 +636,7 @@ mdoc_nd_pre(MDOC_ARGS)
 		abort();
 	}
 	print_text(h, "\\(em");
-	/* Cannot use TAG_SPAN because it may contain blocks. */
-	print_otag(h, TAG_DIV, "c", "Nd");
+	print_otag(h, TAG_SPAN, "c", "Nd");
 	return 1;
 }
 
@@ -723,6 +694,18 @@ mdoc_xr_pre(MDOC_ARGS)
 }
 
 static int
+mdoc_tg_pre(MDOC_ARGS)
+{
+	char	*id;
+
+	if ((id = html_make_id(n, 1)) != NULL) {
+		print_tagq(h, print_otag(h, TAG_MARK, "i", id));
+		free(id);
+	}
+	return 0;
+}
+
+static int
 mdoc_ns_pre(MDOC_ARGS)
 {
 
@@ -766,7 +749,7 @@ mdoc_it_pre(MDOC_ARGS)
 		case ROFFT_HEAD:
 			return 0;
 		case ROFFT_BODY:
-			print_otag(h, TAG_LI, "");
+			print_otag_id(h, TAG_LI, NULL, n);
 			break;
 		default:
 			break;
@@ -778,7 +761,7 @@ mdoc_it_pre(MDOC_ARGS)
 	case LIST_ohang:
 		switch (n->type) {
 		case ROFFT_HEAD:
-			print_otag(h, TAG_DT, "");
+			print_otag_id(h, TAG_DT, NULL, n);
 			break;
 		case ROFFT_BODY:
 			print_otag(h, TAG_DD, "");
@@ -790,7 +773,7 @@ mdoc_it_pre(MDOC_ARGS)
 	case LIST_tag:
 		switch (n->type) {
 		case ROFFT_HEAD:
-			print_otag(h, TAG_DT, "");
+			print_otag_id(h, TAG_DT, NULL, n);
 			break;
 		case ROFFT_BODY:
 			if (n->child == NULL) {
@@ -811,7 +794,7 @@ mdoc_it_pre(MDOC_ARGS)
 			print_otag(h, TAG_TD, "");
 			break;
 		default:
-			print_otag(h, TAG_TR, "");
+			print_otag_id(h, TAG_TR, NULL, n);
 		}
 	default:
 		break;
@@ -877,8 +860,8 @@ mdoc_bl_pre(MDOC_ARGS)
 	case LIST_tag:
 		if (bl->offs)
 			print_otag(h, TAG_DIV, "c", "Bd-indent");
-		print_otag(h, TAG_DL, "c", bl->comp ?
-		    "Bl-tag Bl-compact" : "Bl-tag");
+		print_otag_id(h, TAG_DL,
+		    bl->comp ? "Bl-tag Bl-compact" : "Bl-tag", n->body);
 		return 1;
 	case LIST_column:
 		elemtype = TAG_TABLE;
@@ -891,14 +874,14 @@ mdoc_bl_pre(MDOC_ARGS)
 		(void)strlcat(cattr, " Bd-indent", sizeof(cattr));
 	if (bl->comp)
 		(void)strlcat(cattr, " Bl-compact", sizeof(cattr));
-	print_otag(h, elemtype, "c", cattr);
+	print_otag_id(h, elemtype, cattr, n->body);
 	return 1;
 }
 
 static int
 mdoc_ex_pre(MDOC_ARGS)
 {
-	if (n->prev)
+	if (roff_node_prev(n) != NULL)
 		print_otag(h, TAG_BR, "");
 	return 1;
 }
@@ -913,7 +896,7 @@ mdoc_st_pre(MDOC_ARGS)
 static int
 mdoc_em_pre(MDOC_ARGS)
 {
-	print_otag(h, TAG_I, "c", "Em");
+	print_otag_id(h, TAG_I, "Em", n);
 	return 1;
 }
 
@@ -923,15 +906,15 @@ mdoc_d1_pre(MDOC_ARGS)
 	switch (n->type) {
 	case ROFFT_BLOCK:
 		html_close_paragraph(h);
-		break;
+		return 1;
 	case ROFFT_HEAD:
 		return 0;
 	case ROFFT_BODY:
-		return 1;
+		break;
 	default:
 		abort();
 	}
-	print_otag(h, TAG_DIV, "c", "Bd Bd-indent");
+	print_otag_id(h, TAG_DIV, "Bd Bd-indent", n);
 	if (n->tok == MDOC_Dl)
 		print_otag(h, TAG_CODE, "c", "Li");
 	return 1;
@@ -951,7 +934,7 @@ mdoc_sx_pre(MDOC_ARGS)
 static int
 mdoc_bd_pre(MDOC_ARGS)
 {
-	char			 buf[16];
+	char			 buf[20];
 	struct roff_node	*nn;
 	int			 comp;
 
@@ -975,7 +958,7 @@ mdoc_bd_pre(MDOC_ARGS)
 			continue;
 		if (nn->tok == MDOC_Sh || nn->tok == MDOC_Ss)
 			comp = 1;
-		if (nn->prev != NULL)
+		if (roff_node_prev(nn) != NULL)
 			break;
 	}
 	(void)strlcpy(buf, "Bd", sizeof(buf));
@@ -988,7 +971,10 @@ mdoc_bd_pre(MDOC_ARGS)
 	    strcmp(n->norm->Bd.offs, "left") != 0)
 		(void)strlcat(buf, " Bd-indent", sizeof(buf));
 
-	print_otag(h, TAG_DIV, "c", buf);
+	if (n->norm->Bd.type == DISP_literal)
+		(void)strlcat(buf, " Li", sizeof(buf));
+
+	print_otag_id(h, TAG_DIV, buf, n);
 	return 1;
 }
 
@@ -1039,45 +1025,6 @@ mdoc_cd_pre(MDOC_ARGS)
 }
 
 static int
-mdoc_dv_pre(MDOC_ARGS)
-{
-	char	*id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Dv", id);
-	return 1;
-}
-
-static int
-mdoc_ev_pre(MDOC_ARGS)
-{
-	char	*id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Ev", id);
-	return 1;
-}
-
-static int
-mdoc_er_pre(MDOC_ARGS)
-{
-	char	*id;
-
-	id = n->sec == SEC_ERRORS &&
-	    (n->parent->tok == MDOC_It ||
-	     (n->parent->tok == MDOC_Bq &&
-	      n->parent->parent->parent->tok == MDOC_It)) ?
-	    html_make_id(n, 1) : NULL;
-
-	if (id != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Er", id);
-	return 1;
-}
-
-static int
 mdoc_fa_pre(MDOC_ARGS)
 {
 	const struct roff_node	*nn;
@@ -1087,22 +1034,21 @@ mdoc_fa_pre(MDOC_ARGS)
 		print_otag(h, TAG_VAR, "c", "Fa");
 		return 1;
 	}
-
-	for (nn = n->child; nn; nn = nn->next) {
+	for (nn = n->child; nn != NULL; nn = nn->next) {
 		t = print_otag(h, TAG_VAR, "c", "Fa");
 		print_text(h, nn->string);
 		print_tagq(h, t);
-		if (nn->next) {
+		if (nn->next != NULL) {
 			h->flags |= HTML_NOSPACE;
 			print_text(h, ",");
 		}
 	}
-
-	if (n->child && n->next && n->next->tok == MDOC_Fa) {
+	if (n->child != NULL &&
+	    (nn = roff_node_next(n)) != NULL &&
+	    nn->tok == MDOC_Fa) {
 		h->flags |= HTML_NOSPACE;
 		print_text(h, ",");
 	}
-
 	return 0;
 }
 
@@ -1210,7 +1156,7 @@ mdoc_fn_pre(MDOC_ARGS)
 		print_tagq(h, t);
 	}
 
-	t = print_otag(h, TAG_CODE, "c", "Fn");
+	t = print_otag_id(h, TAG_CODE, "Fn", n);
 
 	if (sp)
 		print_text(h, sp);
@@ -1273,9 +1219,21 @@ mdoc_skip_pre(MDOC_ARGS)
 static int
 mdoc_pp_pre(MDOC_ARGS)
 {
-	if ((n->flags & NODE_NOFILL) == 0) {
+	char	*id;
+
+	if (n->flags & NODE_NOFILL) {
+		print_endline(h);
+		if (n->flags & NODE_ID)
+			mdoc_tg_pre(meta, n, h);
+		else {
+			h->col = 1;
+			print_endline(h);
+		}
+	} else {
 		html_close_paragraph(h);
-		print_otag(h, TAG_P, "c", "Pp");
+		id = n->flags & NODE_ID ? html_make_id(n, 1) : NULL;
+		print_otag(h, TAG_P, "ci", "Pp", id);
+		free(id);
 	}
 	return 0;
 }
@@ -1325,14 +1283,12 @@ mdoc_mt_pre(MDOC_ARGS)
 
 	for (n = n->child; n; n = n->next) {
 		assert(n->type == ROFFT_TEXT);
-
 		mandoc_asprintf(&cp, "mailto:%s", n->string);
 		t = print_otag(h, TAG_A, "ch", "Mt", cp);
 		print_text(h, n->string);
 		print_tagq(h, t);
 		free(cp);
 	}
-
 	return 0;
 }
 
@@ -1341,30 +1297,30 @@ mdoc_fo_pre(MDOC_ARGS)
 {
 	struct tag	*t;
 
-	if (n->type == ROFFT_BODY) {
+	switch (n->type) {
+	case ROFFT_BLOCK:
+		synopsis_pre(h, n);
+		return 1;
+	case ROFFT_HEAD:
+		if (n->child != NULL) {
+			t = print_otag_id(h, TAG_CODE, "Fn", n);
+			print_text(h, n->child->string);
+			print_tagq(h, t);
+		}
+		return 0;
+	case ROFFT_BODY:
 		h->flags |= HTML_NOSPACE;
 		print_text(h, "(");
 		h->flags |= HTML_NOSPACE;
 		return 1;
-	} else if (n->type == ROFFT_BLOCK) {
-		synopsis_pre(h, n);
-		return 1;
+	default:
+		abort();
 	}
-
-	if (n->child == NULL)
-		return 0;
-
-	assert(n->child->string);
-	t = print_otag(h, TAG_CODE, "c", "Fn");
-	print_text(h, n->child->string);
-	print_tagq(h, t);
-	return 0;
 }
 
 static void
 mdoc_fo_post(MDOC_ARGS)
 {
-
 	if (n->type != ROFFT_BODY)
 		return;
 	h->flags |= HTML_NOSPACE;
@@ -1414,19 +1370,7 @@ mdoc_in_pre(MDOC_ARGS)
 		assert(n->type == ROFFT_TEXT);
 		print_text(h, n->string);
 	}
-
 	return 0;
-}
-
-static int
-mdoc_ic_pre(MDOC_ARGS)
-{
-	char	*id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Ic", id);
-	return 1;
 }
 
 static int
@@ -1439,7 +1383,6 @@ mdoc_va_pre(MDOC_ARGS)
 static int
 mdoc_ap_pre(MDOC_ARGS)
 {
-
 	h->flags |= HTML_NOSPACE;
 	print_text(h, "\\(aq");
 	h->flags |= HTML_NOSPACE;
@@ -1478,20 +1421,8 @@ mdoc_bf_pre(MDOC_ARGS)
 }
 
 static int
-mdoc_ms_pre(MDOC_ARGS)
-{
-	char *id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_SPAN, "ci", "Ms", id);
-	return 1;
-}
-
-static int
 mdoc_igndelim_pre(MDOC_ARGS)
 {
-
 	h->flags |= HTML_IGNDELIM;
 	return 1;
 }
@@ -1499,7 +1430,6 @@ mdoc_igndelim_pre(MDOC_ARGS)
 static void
 mdoc_pf_post(MDOC_ARGS)
 {
-
 	if ( ! (n->next == NULL || n->next->flags & NODE_LINE))
 		h->flags |= HTML_NOSPACE;
 }
@@ -1528,36 +1458,23 @@ mdoc_rs_pre(MDOC_ARGS)
 static int
 mdoc_no_pre(MDOC_ARGS)
 {
-	char *id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_SPAN, "ci", "No", id);
-	return 1;
-}
-
-static int
-mdoc_li_pre(MDOC_ARGS)
-{
-	char	*id;
-
-	if ((id = cond_id(n)) != NULL)
-		print_otag(h, TAG_A, "chR", "permalink", id);
-	print_otag(h, TAG_CODE, "ci", "Li", id);
+	print_otag_id(h, TAG_SPAN, roff_name[n->tok], n);
 	return 1;
 }
 
 static int
 mdoc_sy_pre(MDOC_ARGS)
 {
-	print_otag(h, TAG_B, "c", "Sy");
+	print_otag_id(h, TAG_B, "Sy", n);
 	return 1;
 }
 
 static int
 mdoc_lb_pre(MDOC_ARGS)
 {
-	if (SEC_LIBRARY == n->sec && NODE_LINE & n->flags && n->prev)
+	if (n->sec == SEC_LIBRARY &&
+	    n->flags & NODE_LINE &&
+	    roff_node_prev(n) != NULL)
 		print_otag(h, TAG_BR, "");
 
 	print_otag(h, TAG_SPAN, "c", "Lb");
@@ -1567,17 +1484,18 @@ mdoc_lb_pre(MDOC_ARGS)
 static int
 mdoc__x_pre(MDOC_ARGS)
 {
-	const char	*cattr;
-	enum htmltag	 t;
+	struct roff_node	*nn;
+	const char		*cattr;
+	enum htmltag		 t;
 
 	t = TAG_SPAN;
 
 	switch (n->tok) {
 	case MDOC__A:
 		cattr = "RsA";
-		if (n->prev && MDOC__A == n->prev->tok)
-			if (NULL == n->next || MDOC__A != n->next->tok)
-				print_text(h, "and");
+		if ((nn = roff_node_prev(n)) != NULL && nn->tok == MDOC__A &&
+		    ((nn = roff_node_next(n)) == NULL || nn->tok != MDOC__A))
+			print_text(h, "and");
 		break;
 	case MDOC__B:
 		t = TAG_I;
@@ -1632,19 +1550,21 @@ mdoc__x_pre(MDOC_ARGS)
 static void
 mdoc__x_post(MDOC_ARGS)
 {
+	struct roff_node *nn;
 
-	if (MDOC__A == n->tok && n->next && MDOC__A == n->next->tok)
-		if (NULL == n->next->next || MDOC__A != n->next->next->tok)
-			if (NULL == n->prev || MDOC__A != n->prev->tok)
-				return;
+	if (n->tok == MDOC__A &&
+	    (nn = roff_node_next(n)) != NULL && nn->tok == MDOC__A &&
+	    ((nn = roff_node_next(nn)) == NULL || nn->tok != MDOC__A) &&
+	    ((nn = roff_node_prev(n)) == NULL || nn->tok != MDOC__A))
+		return;
 
 	/* TODO: %U */
 
-	if (NULL == n->parent || MDOC_Rs != n->parent->tok)
+	if (n->parent == NULL || n->parent->tok != MDOC_Rs)
 		return;
 
 	h->flags |= HTML_NOSPACE;
-	print_text(h, n->next ? "," : ".");
+	print_text(h, roff_node_next(n) ? "," : ".");
 }
 
 static int
@@ -1701,7 +1621,7 @@ mdoc_quote_pre(MDOC_ARGS)
 		/*
 		 * Give up on semantic markup for now.
 		 * We cannot use TAG_SPAN because .Oo may contain blocks.
-		 * We cannot use TAG_IDIV because we might be in a
+		 * We cannot use TAG_DIV because we might be in a
 		 * phrasing context (like .Dl or .Pp); we cannot
 		 * close out a .Pp at this point either because
 		 * that would break the line.
@@ -1716,9 +1636,11 @@ mdoc_quote_pre(MDOC_ARGS)
 		break;
 	case MDOC_Do:
 	case MDOC_Dq:
+		print_text(h, "\\(lq");
+		break;
 	case MDOC_Qo:
 	case MDOC_Qq:
-		print_text(h, "\\(lq");
+		print_text(h, "\"");
 		break;
 	case MDOC_Po:
 	case MDOC_Pq:
@@ -1774,11 +1696,13 @@ mdoc_quote_post(MDOC_ARGS)
 		else
 			print_text(h, n->norm->Es->child->next->string);
 		break;
-	case MDOC_Qo:
-	case MDOC_Qq:
 	case MDOC_Do:
 	case MDOC_Dq:
 		print_text(h, "\\(rq");
+		break;
+	case MDOC_Qo:
+	case MDOC_Qq:
+		print_text(h, "\"");
 		break;
 	case MDOC_Po:
 	case MDOC_Pq:
