@@ -20,13 +20,13 @@ task:
   - pkg --version
   - mkdir -p /usr/obj/$(pwd -P)
   kernel_build_script:
-  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_KERBEROS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes buildkernel
+  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes buildkernel
   base_build_script:
-  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_KERBEROS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes buildworld
+  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes buildworld
   distribute_script:
   - mkdir -p /usr/obj/$(pwd -P)/amd64.amd64/release/dist/
   - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ -DNO_ROOT distributekernel
-  - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_KERBEROS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes -DNO_ROOT distributeworld
+  - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes -DNO_ROOT distributeworld
   package_script:
   - make packagekernel DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/
   - make packageworld DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_LIB32=yes
