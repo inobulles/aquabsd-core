@@ -482,7 +482,7 @@ linprocfs_domtab(PFS_FILL_ARGS)
 	 * Ideally, this would use the current chroot rather than some
 	 * hardcoded path.
 	 */
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, linux_emul_path, td);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, linux_emul_path);
 	flep = NULL;
 	error = namei(&nd);
 	lep = linux_emul_path;
@@ -539,7 +539,7 @@ linprocfs_doprocmountinfo(PFS_FILL_ARGS)
 	 * Ideally, this would use the current chroot rather than some
 	 * hardcoded path.
 	 */
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, linux_emul_path, td);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, linux_emul_path);
 	flep = NULL;
 	error = namei(&nd);
 	lep = linux_emul_path;
@@ -1277,7 +1277,6 @@ linprocfs_doprocmaps(PFS_FILL_ARGS)
 	char *name = "", *freename = NULL;
 	const char *l_map_str;
 	ino_t ino;
-	int ref_count, shadow_count, flags;
 	int error;
 	struct vnode *vp;
 	struct vattr vat;
@@ -1331,9 +1330,6 @@ linprocfs_doprocmaps(PFS_FILL_ARGS)
 				vref(vp);
 			if (lobj != obj)
 				VM_OBJECT_RUNLOCK(lobj);
-			flags = obj->flags;
-			ref_count = obj->ref_count;
-			shadow_count = obj->shadow_count;
 			VM_OBJECT_RUNLOCK(obj);
 			if (vp != NULL) {
 				vn_fullpath(vp, &name, &freename);
@@ -1353,10 +1349,6 @@ linprocfs_doprocmaps(PFS_FILL_ARGS)
 				if (e_end == p->p_sysent->sv_usrstack)
 					name = stack_str;
 			}
-		} else {
-			flags = 0;
-			ref_count = 0;
-			shadow_count = 0;
 		}
 
 		/*
