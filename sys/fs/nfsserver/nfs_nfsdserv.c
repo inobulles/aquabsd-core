@@ -4959,6 +4959,12 @@ nfsrvd_layoutreturn(struct nfsrv_descript *nd, __unused int isdgram,
 		}
 
 		maxcnt = fxdr_unsigned(int, *tl);
+		/*
+		 * There is no fixed upper bound defined in the RFCs,
+		 * but 128Kbytes should be more than sufficient.
+		 */
+		if (maxcnt < 0 || maxcnt > 131072)
+			maxcnt = 0;
 		if (maxcnt > 0) {
 			layp = malloc(maxcnt + 1, M_TEMP, M_WAITOK);
 			error = nfsrv_mtostr(nd, (char *)layp, maxcnt);
@@ -6089,10 +6095,12 @@ nfsrvd_listxattr(struct nfsrv_descript *nd, __unused int isdgram,
 		if (cookie2 < cookie)
 			nd->nd_repstat = NFSERR_BADXDR;
 	}
+	retlen = NFSX_HYPER + 2 * NFSX_UNSIGNED;
+	if (nd->nd_repstat == 0 && len2 < retlen)
+		nd->nd_repstat = NFSERR_TOOSMALL;
 	if (nd->nd_repstat == 0) {
 		/* Now copy the entries out. */
-		retlen = NFSX_HYPER + 2 * NFSX_UNSIGNED;
-		if (len == 0 && retlen <= len2) {
+		if (len == 0) {
 			/* The cookie was at eof. */
 			NFSM_BUILD(tl, uint32_t *, NFSX_HYPER + 2 *
 			    NFSX_UNSIGNED);
