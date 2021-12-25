@@ -25,30 +25,29 @@
  * SUCH DAMAGE.
  */
 
+#ifdef PORTNCURSES
+#include <ncurses/ncurses.h>
+#else
+#include <ncurses.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#ifdef PORTNCURSES
-#include <ncurses/curses.h>
-#else
-#include <curses.h>
-#endif
 
 #include "bsddialog.h"
 #include "lib_util.h"
 #include "bsddialog_theme.h"
 
 /*
- * This file implements some public function not related to a specific widget.
- * utils.h/c provides private functions to implement the library.
- * theme.h/c is public API related to theme.
- * Widgets implementation:
+ * This file implements public functions not related to a specific dialog.
+ * lib_utils.h/c: private functions to implement the library.
+ * theme.h/c: public API related to themes.
+ * Dialogs implementation:
  *  infobox.c    infobox
  *  messgebox.c  msgbox - yesno
  *  menubox.c    buildlist - checklist - menu - mixedlist - radiolist
  *  formbox.c    inputbox - passwordbox - form - passwordform - mixedform
- *  barbox.c     gauge - mixedgauge - rangebox - pause
+ *  barbox.c     gauge - mixedgauge - rangebox - pause - progressview
  *  textbox.c    textbox
  *  timebox.c    timebox - calendar
  */
@@ -57,13 +56,14 @@ extern struct bsddialog_theme t;
 
 int bsddialog_init(void)
 {
-	int i, j, c = 1, error = OK;
+	int i, j, c, error;
 
 	set_error_string("");
 
 	if(initscr() == NULL)
 		RETURN_ERROR("Cannot init ncurses (initscr)");
 
+	error = OK;
 	error += keypad(stdscr, TRUE);
 	nl();
 	error += cbreak();
@@ -74,6 +74,7 @@ int bsddialog_init(void)
 		RETURN_ERROR("Cannot init ncurses (keypad and cursor)");
 	}
 
+	c = 1;
 	error += start_color();
 	for (i=0; i<8; i++)
 		for(j=0; j<8; j++) {
@@ -85,55 +86,58 @@ int bsddialog_init(void)
 		RETURN_ERROR("Cannot init ncurses (colors)");
 	}
 
-	if (bsddialog_set_default_theme(BSDDIALOG_THEME_DIALOG) != 0)
-		error = BSDDIALOG_ERROR;
+	if (bsddialog_set_default_theme(BSDDIALOG_THEME_DEFAULT) != 0) {
+		bsddialog_end();
+		return (BSDDIALOG_ERROR);
+	}
 
-	return error;
+	return (BSDDIALOG_OK);
 }
 
 int bsddialog_end(void)
 {
-
 	if (endwin() != OK)
 		RETURN_ERROR("Cannot end ncurses (endwin)");
 
-	return 0;
+	return (BSDDIALOG_OK);
 }
 
 int bsddialog_backtitle(struct bsddialog_conf *conf, char *backtitle)
 {
-
 	mvaddstr(0, 1, backtitle);
 	if (conf->no_lines != true)
 		mvhline(1, 1, conf->ascii_lines ? '-' : ACS_HLINE, COLS-2);
 
 	refresh();
 
-	return 0;
+	return (BSDDIALOG_OK);
 }
 
 const char *bsddialog_geterror(void)
 {
-
-	return get_error_string();
+	return (get_error_string());
 }
 
-int bsddialog_terminalheight(void)
+int bsddialog_initconf(struct bsddialog_conf *conf)
 {
-
-	return LINES;
-}
-
-int bsddialog_terminalwidth(void)
-{
-
-	return COLS;
-}
-
-void bsddialog_initconf(struct bsddialog_conf *conf)
-{
+	if (conf == NULL)
+		RETURN_ERROR("conf is NULL");
+	if (sizeof(*conf) != sizeof(struct bsddialog_conf))
+		RETURN_ERROR("Bad conf size");
 
 	memset(conf, 0, sizeof(struct bsddialog_conf));
-	conf->x = conf->y = BSDDIALOG_CENTER;
+	conf->y = BSDDIALOG_CENTER;
+	conf->x = BSDDIALOG_CENTER;
 	conf->shadow = true;
+
+	return (BSDDIALOG_OK);
+}
+
+int bsddialog_clearterminal(void)
+{
+	if (clear() != OK)
+		RETURN_ERROR("Cannot clear the terminal");
+	refresh();
+
+	return (BSDDIALOG_OK);
 }

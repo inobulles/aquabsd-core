@@ -32,8 +32,11 @@
  * Utils to implement widgets - Internal library  API - Dafult values
  */
 
-#define HBORDERS	2
-#define VBORDERS	2
+#define HBORDER		1
+#define HBORDERS	(HBORDER + HBORDER)
+#define VBORDER		1
+#define VBORDERS	(VBORDER + VBORDER)
+#define PADDING(p)	(p)
 
 /* ncurses has not a Ctrl key macro */
 #define KEY_CTRL(x) ((x) & 0x1f)
@@ -61,9 +64,7 @@ void set_error_string(char *string);
 #define LABEL_exit_label	"EXIT"
 #define LABEL_extra_label	"Extra"
 #define LABEL_help_label	"Help"
-#define LABEL_no_label		"No"
 #define LABEL_ok_label		"OK"
-#define LABEL_yes_label		"Yes"
 #define BUTTONLABEL(l) (conf->button.l != NULL ? conf->button.l : LABEL_ ##l)
 
 #define MAXBUTTONS	6 /* yes|ok + extra + no|cancel + help + 2 generics */

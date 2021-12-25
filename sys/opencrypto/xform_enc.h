@@ -54,6 +54,7 @@ struct enc_xform {
 	uint16_t native_blocksize;	/* Used for stream ciphers. */
 	uint16_t ivsize;
 	uint16_t minkey, maxkey;
+	uint16_t macsize;		/* For AEAD ciphers. */
 
 	/*
 	 * Encrypt/decrypt a single block.  For stream ciphers this
@@ -70,11 +71,17 @@ struct enc_xform {
 	 */
 	void (*encrypt_last) (void *, const uint8_t *, uint8_t *, size_t len);
 	void (*decrypt_last) (void *, const uint8_t *, uint8_t *, size_t len);
+
+	/*
+	 * For AEAD ciphers, update and generate MAC/tag.
+	 */
+	int  (*update) (void *, const void *, u_int);
+	void (*final) (uint8_t *, void *);
 };
 
 
 extern const struct enc_xform enc_xform_null;
-extern const struct enc_xform enc_xform_rijndael128;
+extern const struct enc_xform enc_xform_aes_cbc;
 extern const struct enc_xform enc_xform_aes_icm;
 extern const struct enc_xform enc_xform_aes_nist_gcm;
 extern const struct enc_xform enc_xform_aes_nist_gmac;

@@ -784,12 +784,26 @@ do_sync:
 			uio.uio_rw = UIO_WRITE;
 			uio.uio_td = td;
 			iomode = NFSWRITE_FILESYNC;
+			/*
+			 * When doing direct I/O we do not care if the
+			 * server's write verifier has changed, but we
+			 * do not want to update the verifier if it has
+			 * changed, since that hides the change from
+			 * writes being done through the buffer cache.
+			 * By passing must_commit in set to two, the code
+			 * in nfsrpc_writerpc() will not update the
+			 * verifier on the mount point.
+			 */
+			must_commit = 2;
 			error = ncl_writerpc(vp, &uio, cred, &iomode,
 			    &must_commit, 0);
-			KASSERT((must_commit == 0),
-				("ncl_directio_write: Did not commit write"));
+			KASSERT((must_commit == 2),
+			    ("ncl_directio_write: Updated write verifier"));
 			if (error)
 				return (error);
+			if (iomode != NFSWRITE_FILESYNC)
+				printf("nfs_directio_write: Broken server "
+				    "did not reply FILE_SYNC\n");
 			uiop->uio_offset += size;
 			uiop->uio_resid -= size;
 			if (uiop->uio_iov->iov_len <= size) {
@@ -987,8 +1001,24 @@ ncl_write(struct vop_write_args *ap)
 	if (uio->uio_resid == 0)
 		return (0);
 
-	if (newnfs_directio_enable && (ioflag & IO_DIRECT) && vp->v_type == VREG)
+	/*
+	 * If the file in not mmap()'d, do IO_APPEND writing via a
+	 * synchronous direct write.  This can result in a significant
+	 * performance improvement.
+	 * If the file is mmap()'d, this cannot be done, since there
+	 * is no way to maintain consistency between the file on the
+	 * NFS server and the file's mmap()'d pages.
+	 */
+	NFSLOCKNODE(np);
+	if (vp->v_type == VREG && ((newnfs_directio_enable && (ioflag &
+	    IO_DIRECT)) || ((ioflag & IO_APPEND) &&
+	    (vp->v_object == NULL || !vm_object_is_active(vp->v_object))))) {
+		NFSUNLOCKNODE(np);
+		if ((ioflag & IO_APPEND) != 0)
+			ioflag |= IO_SYNC;
 		return nfs_directio_write(vp, uio, cred, ioflag);
+	}
+	NFSUNLOCKNODE(np);
 
 	/*
 	 * Maybe this should be above the vnode op call, but so long as
@@ -1592,8 +1622,23 @@ ncl_doio_directwrite(struct buf *bp)
 
 	iomode = NFSWRITE_FILESYNC;
 	uiop->uio_td = NULL; /* NULL since we're in nfsiod */
+	/*
+	 * When doing direct I/O we do not care if the
+	 * server's write verifier has changed, but we
+	 * do not want to update the verifier if it has
+	 * changed, since that hides the change from
+	 * writes being done through the buffer cache.
+	 * By passing must_commit in set to two, the code
+	 * in nfsrpc_writerpc() will not update the
+	 * verifier on the mount point.
+	 */
+	must_commit = 2;
 	ncl_writerpc(bp->b_vp, uiop, bp->b_wcred, &iomode, &must_commit, 0);
-	KASSERT((must_commit == 0), ("ncl_doio_directwrite: Did not commit write"));
+	KASSERT((must_commit == 2), ("ncl_doio_directwrite: Updated write"
+	    " verifier"));
+	if (iomode != NFSWRITE_FILESYNC)
+		printf("ncl_doio_directwrite: Broken server "
+		    "did not reply FILE_SYNC\n");
 	free(iov_base, M_NFSDIRECTIO);
 	free(uiop->uio_iov, M_NFSDIRECTIO);
 	free(uiop, M_NFSDIRECTIO);
@@ -1864,7 +1909,7 @@ ncl_doio(struct vnode *vp, struct buf *bp, struct ucred *cr, struct thread *td,
 	    }
 	}
 	bp->b_resid = uiop->uio_resid;
-	if (must_commit)
+	if (must_commit == 1)
 	    ncl_clearcommit(vp->v_mount);
 	bufdone(bp);
 	return (error);

@@ -48,11 +48,6 @@ miidevs.h			optional miibus | mii			   \
 	compile-with	"${AWK} -f $S/tools/miidevs2h.awk $S/dev/mii/miidevs" \
 	no-obj no-implicit-rule before-depend				   \
 	clean		"miidevs.h"
-pccarddevs.h			standard				   \
-	dependency	"$S/tools/pccarddevs2h.awk $S/dev/pccard/pccarddevs" \
-	compile-with	"${AWK} -f $S/tools/pccarddevs2h.awk $S/dev/pccard/pccarddevs" \
-	no-obj no-implicit-rule before-depend				   \
-	clean		"pccarddevs.h"
 kbdmuxmap.h			optional	kbdmux_dflt_keymap 	   \
 	compile-with	"${KEYMAP} -L ${KBDMUX_DFLT_KEYMAP} | ${KEYMAP_FIX} > ${.TARGET}" \
 	no-obj no-implicit-rule before-depend				\
@@ -581,42 +576,42 @@ contrib/dev/acpica/components/utilities/utxface.c	optional acpi
 contrib/dev/acpica/components/utilities/utxferror.c	optional acpi
 contrib/dev/acpica/components/utilities/utxfinit.c	optional acpi
 contrib/dev/acpica/os_specific/service_layers/osgendbg.c	optional acpi acpi_debug
-contrib/ipfilter/netinet/fil.c	optional ipfilter inet \
-	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_auth.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_fil_freebsd.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_frag.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_log.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_nat.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_proxy.c optional ipfilter inet \
-	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_state.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_lookup.c optional ipfilter inet \
-	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN} -Wno-unused -Wno-error -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_pool.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_htable.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter ${NO_WTAUTOLOGICAL_POINTER_COMPARE}"
-contrib/ipfilter/netinet/ip_sync.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/mlfk_ipl.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_nat6.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_rules.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_scan.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/ip_dstlist.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -Wno-unused -I$S/contrib/ipfilter"
-contrib/ipfilter/netinet/radix_ipf.c optional ipfilter inet \
-	compile-with "${NORMAL_C} -I$S/contrib/ipfilter"
+netpfil/ipfilter/netinet/fil.c	optional ipfilter inet \
+	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_auth.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_fil_freebsd.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_frag.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_log.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_nat.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_proxy.c optional ipfilter inet \
+	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_state.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_lookup.c optional ipfilter inet \
+	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN} -Wno-unused -Wno-error -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_pool.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_htable.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter ${NO_WTAUTOLOGICAL_POINTER_COMPARE}"
+netpfil/ipfilter/netinet/ip_sync.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/mlfk_ipl.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_nat6.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_rules.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_scan.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/ip_dstlist.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -Wno-unused -I$S/netpfil/ipfilter"
+netpfil/ipfilter/netinet/radix_ipf.c optional ipfilter inet \
+	compile-with "${NORMAL_C} -I$S/netpfil/ipfilter"
 contrib/libfdt/fdt.c		optional fdt
 contrib/libfdt/fdt_ro.c		optional fdt
 contrib/libfdt/fdt_rw.c		optional fdt
@@ -1497,7 +1492,7 @@ t4fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t4fw.fwo"
 t4fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t4fw-1.26.2.0.bin"	\
+	dependency	"$S/dev/cxgbe/firmware/t4fw-1.26.4.0.bin"	\
 	compile-with	"${CP} ${.ALLSRC} ${.TARGET}"			\
 	no-obj no-implicit-rule						\
 	clean		"t4fw.fw"
@@ -1531,7 +1526,7 @@ t5fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t5fw.fwo"
 t5fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t5fw-1.26.2.0.bin"	\
+	dependency	"$S/dev/cxgbe/firmware/t5fw-1.26.4.0.bin"	\
 	compile-with	"${CP} ${.ALLSRC} ${.TARGET}"			\
 	no-obj no-implicit-rule						\
 	clean		"t5fw.fw"
@@ -1565,7 +1560,7 @@ t6fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t6fw.fwo"
 t6fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t6fw-1.26.2.0.bin"	\
+	dependency	"$S/dev/cxgbe/firmware/t6fw-1.26.4.0.bin"	\
 	compile-with	"${CP} ${.ALLSRC} ${.TARGET}"			\
 	no-obj no-implicit-rule						\
 	clean		"t6fw.fw"
@@ -2607,10 +2602,6 @@ dev/ow/own_if.m			optional ow
 dev/ow/ow_temp.c		optional ow_temp
 dev/ow/owc_gpiobus.c		optional owc gpio
 dev/pbio/pbio.c			optional pbio isa
-dev/pccard/pccard.c		optional pccard
-dev/pccard/pccard_cis.c		optional pccard
-dev/pccard/pccard_cis_quirks.c	optional pccard
-dev/pccard/pccard_device.c	optional pccard
 dev/pccbb/pccbb.c		optional cbb
 dev/pccbb/pccbb_pci.c		optional cbb pci
 dev/pcf/pcf.c			optional pcf
@@ -4948,10 +4939,25 @@ opencrypto/xform_chacha20_poly1305.c	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include -I$S/crypto/libsodium"
 opencrypto/xform_poly1305.c	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include -I$S/crypto/libsodium"
+contrib/libsodium/src/libsodium/crypto_aead/chacha20poly1305/sodium/aead_chacha20poly1305.c \
+	optional crypto \
+	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
+contrib/libsodium/src/libsodium/crypto_aead/xchacha20poly1305/sodium/aead_xchacha20poly1305.c \
+	optional crypto \
+	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
+contrib/libsodium/src/libsodium/crypto_core/hchacha20/core_hchacha20.c \
+	optional crypto \
+	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
 contrib/libsodium/src/libsodium/crypto_onetimeauth/poly1305/onetimeauth_poly1305.c \
 	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
 contrib/libsodium/src/libsodium/crypto_onetimeauth/poly1305/donna/poly1305_donna.c \
+	optional crypto \
+	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
+contrib/libsodium/src/libsodium/crypto_stream/chacha20/stream_chacha20.c \
+	optional crypto \
+	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
+contrib/libsodium/src/libsodium/crypto_stream/chacha20/ref/chacha20_ref.c \
 	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
 contrib/libsodium/src/libsodium/crypto_verify/sodium/verify.c \
@@ -4961,21 +4967,6 @@ crypto/libsodium/randombytes.c	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include -I$S/crypto/libsodium"
 crypto/libsodium/utils.c	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include -I$S/crypto/libsodium"
-contrib/libsodium/src/libsodium/crypto_core/hchacha20/core_hchacha20.c \
-	optional crypto \
-	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
-contrib/libsodium/src/libsodium/crypto_stream/chacha20/stream_chacha20.c \
-	optional crypto \
-	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
-contrib/libsodium/src/libsodium/crypto_stream/chacha20/ref/chacha20_ref.c \
-	optional crypto \
-	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
-contrib/libsodium/src/libsodium/crypto_aead/chacha20poly1305/sodium/aead_chacha20poly1305.c \
-	optional crypto \
-	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
-contrib/libsodium/src/libsodium/crypto_aead/xchacha20poly1305/sodium/aead_xchacha20poly1305.c \
-	optional crypto \
-	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include/sodium -I$S/crypto/libsodium"
 
 rpc/auth_none.c			optional krpc | nfslockd | nfscl | nfsd
 rpc/auth_unix.c			optional krpc | nfslockd | nfscl | nfsd

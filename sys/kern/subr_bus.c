@@ -267,6 +267,7 @@ device_sysctl_handler(SYSCTL_HANDLER_ARGS)
 
 	sbuf_new_for_sysctl(&sb, NULL, 1024, req);
 	sbuf_clear_flags(&sb, SBUF_INCLUDENUL);
+	bus_topo_lock();
 	switch (arg2) {
 	case DEVICE_SYSCTL_DESC:
 		sbuf_cat(&sb, dev->desc ? dev->desc : "");
@@ -284,10 +285,12 @@ device_sysctl_handler(SYSCTL_HANDLER_ARGS)
 		sbuf_cat(&sb, dev->parent ? dev->parent->nameunit : "");
 		break;
 	default:
-		sbuf_delete(&sb);
-		return (EINVAL);
+		error = EINVAL;
+		goto out;
 	}
 	error = sbuf_finish(&sb);
+out:
+	bus_topo_unlock();
 	sbuf_delete(&sb);
 	return (error);
 }
@@ -307,33 +310,33 @@ device_sysctl_init(device_t dev)
 	    dev->nameunit + strlen(dc->name),
 	    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "", "device_index");
 	SYSCTL_ADD_PROC(&dev->sysctl_ctx, SYSCTL_CHILDREN(dev->sysctl_tree),
-	    OID_AUTO, "%desc", CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT,
+	    OID_AUTO, "%desc", CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
 	    dev, DEVICE_SYSCTL_DESC, device_sysctl_handler, "A",
 	    "device description");
 	SYSCTL_ADD_PROC(&dev->sysctl_ctx, SYSCTL_CHILDREN(dev->sysctl_tree),
 	    OID_AUTO, "%driver",
-	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT,
+	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
 	    dev, DEVICE_SYSCTL_DRIVER, device_sysctl_handler, "A",
 	    "device driver name");
 	SYSCTL_ADD_PROC(&dev->sysctl_ctx, SYSCTL_CHILDREN(dev->sysctl_tree),
 	    OID_AUTO, "%location",
-	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT,
+	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
 	    dev, DEVICE_SYSCTL_LOCATION, device_sysctl_handler, "A",
 	    "device location relative to parent");
 	SYSCTL_ADD_PROC(&dev->sysctl_ctx, SYSCTL_CHILDREN(dev->sysctl_tree),
 	    OID_AUTO, "%pnpinfo",
-	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT,
+	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
 	    dev, DEVICE_SYSCTL_PNPINFO, device_sysctl_handler, "A",
 	    "device identification");
 	SYSCTL_ADD_PROC(&dev->sysctl_ctx, SYSCTL_CHILDREN(dev->sysctl_tree),
 	    OID_AUTO, "%parent",
-	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT,
+	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
 	    dev, DEVICE_SYSCTL_PARENT, device_sysctl_handler, "A",
 	    "parent device");
 	if (bus_get_domain(dev, &domain) == 0)
 		SYSCTL_ADD_INT(&dev->sysctl_ctx,
 		    SYSCTL_CHILDREN(dev->sysctl_tree), OID_AUTO, "%domain",
-		    CTLFLAG_RD, NULL, domain, "NUMA domain");
+		    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, domain, "NUMA domain");
 }
 
 static void
@@ -863,6 +866,34 @@ static kobj_method_t null_methods[] = {
 };
 
 DEFINE_CLASS(null, null_methods, 0);
+
+void
+bus_topo_assert()
+{
+
+	GIANT_REQUIRED;	
+}
+
+struct mtx *
+bus_topo_mtx(void)
+{
+
+	return (&Giant);
+}
+
+void
+bus_topo_lock(void)
+{
+
+	mtx_lock(bus_topo_mtx());
+}
+
+void
+bus_topo_unlock(void)
+{
+
+	mtx_unlock(bus_topo_mtx());
+}
 
 /*
  * Bus pass implementation
@@ -2078,7 +2109,7 @@ device_probe_child(device_t dev, device_t child)
 	/* We should preserve the devclass (or lack of) set by the bus. */
 	int hasclass = (child->devclass != NULL);
 
-	GIANT_REQUIRED;
+	bus_topo_assert();
 
 	dc = dev->devclass;
 	if (!dc)
@@ -2896,7 +2927,7 @@ device_probe(device_t dev)
 {
 	int error;
 
-	GIANT_REQUIRED;
+	bus_topo_assert();
 
 	if (dev->state >= DS_ALIVE)
 		return (-1);
@@ -2930,7 +2961,7 @@ device_probe_and_attach(device_t dev)
 {
 	int error;
 
-	GIANT_REQUIRED;
+	bus_topo_assert();
 
 	error = device_probe(dev);
 	if (error == -1)
@@ -3028,7 +3059,7 @@ device_detach(device_t dev)
 {
 	int error;
 
-	GIANT_REQUIRED;
+	bus_topo_assert();
 
 	PDEBUG(("%s", DEVICENAME(dev)));
 	if (dev->busy > 0)
@@ -5707,7 +5738,7 @@ devctl2_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	int error, old;
 
 	/* Locate the device to control. */
-	mtx_lock(&Giant);
+	bus_topo_lock();
 	req = (struct devreq *)data;
 	switch (cmd) {
 	case DEV_ATTACH:
@@ -5734,7 +5765,7 @@ devctl2_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		break;
 	}
 	if (error) {
-		mtx_unlock(&Giant);
+		bus_topo_unlock();
 		return (error);
 	}
 
@@ -5955,7 +5986,7 @@ devctl2_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		    req->dr_flags);
 		break;
 	}
-	mtx_unlock(&Giant);
+	bus_topo_unlock();
 	return (error);
 }
 

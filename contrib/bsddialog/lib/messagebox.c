@@ -28,33 +28,26 @@
 #include <sys/param.h>
 
 #include <ctype.h>
-#include <string.h>
-
 #ifdef PORTNCURSES
-#include <ncurses/curses.h>
+#include <ncurses/ncurses.h>
 #else
-#include <curses.h>
+#include <ncurses.h>
 #endif
+#include <string.h>
 
 #include "bsddialog.h"
 #include "lib_util.h"
 #include "bsddialog_theme.h"
 
-/* "Message": msgbox - yesno */
-
 #define AUTO_WIDTH	(COLS / 3U)
-/*
- * Min height = 5: 2 up & down borders + 2 label & up border buttons + 1 line
- * for text, at least 1 line is important for widget_withtextpad_init() to avoid
- * "Cannot build the pad window for text".
- */
-#define MIN_HEIGHT	5
+/* at least 1 line text for its pad building in widget_withtextpad_init() */
+#define MIN_HEIGHT	(HBORDERS + 2 /*buttons*/ + 1 /*text*/)
 
 extern struct bsddialog_theme t;
 
 static int
-message_autosize(struct bsddialog_conf *conf, int rows, int cols, int *h, int *w,
-    char *text, struct buttons bs)
+message_autosize(struct bsddialog_conf *conf, int rows, int cols, int *h,
+    int *w, char *text, struct buttons bs)
 {
 	int maxword, maxline, nlines, line;
 
@@ -70,6 +63,8 @@ message_autosize(struct bsddialog_conf *conf, int rows, int cols, int *h, int *w
 		line = MIN(maxline + VBORDERS + t.text.hmargin * 2, AUTO_WIDTH);
 		line = MAX(line, (int) (maxword + VBORDERS + t.text.hmargin * 2));
 		*w = MAX(*w, line);
+		/* conf.auto_minwidth */
+		*w = MAX(*w, (int)conf->auto_minwidth);
 		/* avoid terminal overflow */
 		*w = MIN(*w, widget_max_width(conf));
 	}
@@ -77,8 +72,10 @@ message_autosize(struct bsddialog_conf *conf, int rows, int cols, int *h, int *w
 	if (rows == BSDDIALOG_AUTOSIZE) {
 		*h = MIN_HEIGHT - 1;
 		if (maxword > 0)
-			*h += MAX(nlines, (*w / GET_ASPECT_RATIO(conf)));
+			*h += MAX(nlines, (int)(*w / GET_ASPECT_RATIO(conf)));
 		*h = MAX(*h, MIN_HEIGHT);
+		/* conf.auto_minheight */
+		*h = MAX(*h, (int)conf->auto_minheight);
 		/* avoid terminal overflow */
 		*h = MIN(*h, widget_max_height(conf));
 	}
@@ -105,9 +102,9 @@ static int message_checksize(int rows, int cols, struct buttons bs)
 }
 
 static void
-buttonsupdate(WINDOW *widget, int h, int w, struct buttons bs, bool shortkey)
+buttonsupdate(WINDOW *widget, int h, int w, struct buttons bs)
 {
-	draw_buttons(widget, h-2, w, bs, shortkey);
+	draw_buttons(widget, h-2, w, bs, true);
 	wnoutrefresh(widget);
 }
 
@@ -115,7 +112,6 @@ static void
 textupdate(WINDOW *widget, int y, int x, int h, int w, WINDOW *textpad,
     int htextpad, int textrow)
 {
-
 	if (htextpad > h - 4) {
 		mvwprintw(widget, h-3, w-6, "%3d%%",
 		    100 * (textrow+h-4)/ htextpad);
@@ -126,8 +122,8 @@ textupdate(WINDOW *widget, int y, int x, int h, int w, WINDOW *textpad,
 }
 
 static int
-do_widget(struct bsddialog_conf *conf, char *text, int rows, int cols,
-    struct buttons bs, bool shortkey)
+do_dialog(struct bsddialog_conf *conf, char *text, int rows, int cols,
+    struct buttons bs)
 {
 	WINDOW *widget, *textpad, *shadow;
 	bool loop;
@@ -148,7 +144,7 @@ do_widget(struct bsddialog_conf *conf, char *text, int rows, int cols,
 
 	textrow = 0;
 	loop = true;
-	buttonsupdate(widget, h, w, bs, shortkey);
+	buttonsupdate(widget, h, w, bs);
 	textupdate(widget, y, x, h, w, textpad, htextpad, textrow);
 	while(loop) {
 		doupdate();
@@ -164,10 +160,10 @@ do_widget(struct bsddialog_conf *conf, char *text, int rows, int cols,
 			break;
 		case '\t': /* TAB */
 			bs.curr = (bs.curr + 1) % bs.nbuttons;
-			buttonsupdate(widget, h, w, bs, shortkey);
+			buttonsupdate(widget, h, w, bs);
 			break;
 		case KEY_F(1):
-			if (conf->hfile == NULL)
+			if (conf->f1_file == NULL && conf->f1_message == NULL)
 				break;
 			if (f1help(conf) != 0)
 				return BSDDIALOG_ERROR;
@@ -206,7 +202,7 @@ do_widget(struct bsddialog_conf *conf, char *text, int rows, int cols,
 			    RAISED, textpad, &htextpad, text, true) != 0)
 				return BSDDIALOG_ERROR;
 
-			buttonsupdate(widget, h, w, bs, shortkey);
+			buttonsupdate(widget, h, w, bs);
 			textupdate(widget, y, x, h, w, textpad, htextpad, textrow);
 
 			/* Important to fix grey lines expanding screen */
@@ -227,21 +223,18 @@ do_widget(struct bsddialog_conf *conf, char *text, int rows, int cols,
 		case KEY_LEFT:
 			if (bs.curr > 0) {
 				bs.curr--;
-				buttonsupdate(widget, h, w, bs, shortkey);
+				buttonsupdate(widget, h, w, bs);
 			}
 			break;
 		case KEY_RIGHT:
 			if (bs.curr < (int) bs.nbuttons - 1) {
 				bs.curr++;
-				buttonsupdate(widget, h, w, bs, shortkey);
+				buttonsupdate(widget, h, w, bs);
 			}
 			break;
 		default:
-			if (shortkey == false)
-				break;
-
 			for (i = 0; i < (int) bs.nbuttons; i++)
-				if (tolower(input) == tolower((bs.label[i])[0])) {
+				if (tolower(input) == tolower(bs.label[i][0])) {
 					output = bs.value[i];
 					loop = false;
 			}
@@ -254,16 +247,15 @@ do_widget(struct bsddialog_conf *conf, char *text, int rows, int cols,
 }
 
 /* API */
-
 int
 bsddialog_msgbox(struct bsddialog_conf *conf, char* text, int rows, int cols)
 {
 	struct buttons bs;
 
 	get_buttons(conf, &bs, BUTTONLABEL(ok_label), BUTTONLABEL(extra_label),
-	    NULL /* nocancel */, BUTTONLABEL(help_label));
+	    NULL, BUTTONLABEL(help_label));
 
-	return (do_widget(conf, text, rows, cols, bs, true));
+	return (do_dialog(conf, text, rows, cols, bs));
 }
 
 int
@@ -271,8 +263,11 @@ bsddialog_yesno(struct bsddialog_conf *conf, char* text, int rows, int cols)
 {
 	struct buttons bs;
 
-	get_buttons(conf, &bs, BUTTONLABEL(yes_label), BUTTONLABEL(extra_label),
-	    BUTTONLABEL(no_label), BUTTONLABEL(help_label));
+	get_buttons(conf, &bs,
+	    conf->button.ok_label == NULL ? "Yes" : conf->button.ok_label,
+	    BUTTONLABEL(extra_label),
+	    conf->button.cancel_label == NULL ? "No" : conf->button.cancel_label,
+	    BUTTONLABEL(help_label));
 
-	return (do_widget(conf, text, rows, cols, bs, true));
+	return (do_dialog(conf, text, rows, cols, bs));
 }

@@ -590,7 +590,7 @@ static struct supported_ealgs {
 	int sadb_alg;
 	const struct enc_xform *xform;
 } supported_ealgs[] = {
-	{ SADB_X_EALG_AES,		&enc_xform_rijndael128 },
+	{ SADB_X_EALG_AES,		&enc_xform_aes_cbc },
 	{ SADB_EALG_NULL,		&enc_xform_null },
 	{ SADB_X_EALG_AESCTR,		&enc_xform_aes_icm },
 	{ SADB_X_EALG_AESGCM16,		&enc_xform_aes_nist_gcm },
@@ -5055,7 +5055,7 @@ key_do_getnewspi(struct sadb_spirange *spirange, struct secasindex *saidx)
 	}
 
 	if (min == max) {
-		if (!key_checkspidup(htonl(min))) {
+		if (key_checkspidup(htonl(min))) {
 			ipseclog((LOG_DEBUG, "%s: SPI %u exists already.\n",
 			    __func__, min));
 			return 0;

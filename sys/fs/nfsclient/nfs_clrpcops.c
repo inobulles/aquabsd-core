@@ -1857,7 +1857,8 @@ nfsrpc_write(vnode_t vp, struct uio *uiop, int *iomode, int *must_commit,
 	nfsv4stateid_t stateid;
 	void *lckp;
 
-	*must_commit = 0;
+	KASSERT(*must_commit >= 0 && *must_commit <= 2,
+	    ("nfsrpc_write: must_commit out of range=%d", *must_commit));
 	if (nmp->nm_clp != NULL)
 		clidrev = nmp->nm_clp->nfsc_clientidrev;
 	newcred = cred;
@@ -2070,7 +2071,7 @@ nfsrpc_writerpc(vnode_t vp, struct uio *uiop, int *iomode,
 					    NFSX_VERF);
 					NFSSETWRITEVERF(nmp);
 	    			} else if (NFSBCMP(tl, nmp->nm_verf,
-				    NFSX_VERF)) {
+				    NFSX_VERF) && *must_commit != 2) {
 					*must_commit = 1;
 					NFSBCOPY(tl, nmp->nm_verf, NFSX_VERF);
 				}
@@ -2513,7 +2514,9 @@ nfsrpc_createv4(vnode_t dvp, char *name, int namelen, struct vattr *vap,
 		stateid.other[1] = *tl++;
 		stateid.other[2] = *tl;
 		rflags = fxdr_unsigned(u_int32_t, *(tl + 6));
-		(void) nfsrv_getattrbits(nd, &attrbits, NULL, NULL);
+		error = nfsrv_getattrbits(nd, &attrbits, NULL, NULL);
+		if (error)
+			goto nfsmout;
 		NFSM_DISSECT(tl, u_int32_t *, NFSX_UNSIGNED);
 		deleg = fxdr_unsigned(int, *tl);
 		if (deleg == NFSV4OPEN_DELEGATEREAD ||
@@ -6250,6 +6253,10 @@ nfscl_doiods(vnode_t vp, struct uio *uiop, int *iomode, int *must_commit,
 					    timo);
 				if (error == 0 && tdrpc->err != 0)
 					error = tdrpc->err;
+				if (rwaccess != NFSV4OPEN_ACCESSREAD &&
+				    docommit == 0 && *must_commit == 0 &&
+				    tdrpc->must_commit == 1)
+					*must_commit = 1;
 			}
 			free(drpc, M_TEMP);
 			if (error == 0) {
@@ -6812,7 +6819,8 @@ nfsrpc_writeds(vnode_t vp, struct uio *uiop, int *iomode, int *must_commit,
 			if (!NFSHASWRITEVERF(nmp)) {
 				NFSBCOPY(tl, nmp->nm_verf, NFSX_VERF);
 				NFSSETWRITEVERF(nmp);
-	    		} else if (NFSBCMP(tl, nmp->nm_verf, NFSX_VERF)) {
+			} else if (NFSBCMP(tl, nmp->nm_verf, NFSX_VERF) &&
+			    *must_commit != 2) {
 				*must_commit = 1;
 				NFSBCOPY(tl, nmp->nm_verf, NFSX_VERF);
 			}
@@ -6822,7 +6830,8 @@ nfsrpc_writeds(vnode_t vp, struct uio *uiop, int *iomode, int *must_commit,
 			if ((dsp->nfsclds_flags & NFSCLDS_HASWRITEVERF) == 0) {
 				NFSBCOPY(tl, dsp->nfsclds_verf, NFSX_VERF);
 				dsp->nfsclds_flags |= NFSCLDS_HASWRITEVERF;
-			} else if (NFSBCMP(tl, dsp->nfsclds_verf, NFSX_VERF)) {
+			} else if (NFSBCMP(tl, dsp->nfsclds_verf, NFSX_VERF) &&
+			    *must_commit != 2) {
 				*must_commit = 1;
 				NFSBCOPY(tl, dsp->nfsclds_verf, NFSX_VERF);
 			}
@@ -6930,7 +6939,8 @@ nfsrpc_writedsmir(vnode_t vp, int *iomode, int *must_commit,
 		if ((dsp->nfsclds_flags & NFSCLDS_HASWRITEVERF) == 0) {
 			NFSBCOPY(tl, dsp->nfsclds_verf, NFSX_VERF);
 			dsp->nfsclds_flags |= NFSCLDS_HASWRITEVERF;
-		} else if (NFSBCMP(tl, dsp->nfsclds_verf, NFSX_VERF)) {
+		} else if (NFSBCMP(tl, dsp->nfsclds_verf, NFSX_VERF) &&
+		    *must_commit != 2) {
 			*must_commit = 1;
 			NFSBCOPY(tl, dsp->nfsclds_verf, NFSX_VERF);
 		}
@@ -6995,8 +7005,8 @@ nfsio_writedsmir(vnode_t vp, int *iomode, int *must_commit,
 		NFSCL_DEBUG(4, "nfsio_writedsmir: nfs_pnfsio=%d\n", ret);
 	}
 	if (ret != 0)
-		error = nfsrpc_writedsmir(vp, iomode, must_commit, stateidp,
-		    dsp, off, len, fhp, m, vers, minorvers, cred, p);
+		error = nfsrpc_writedsmir(vp, iomode, &drpc->must_commit,
+		    stateidp, dsp, off, len, fhp, m, vers, minorvers, cred, p);
 	NFSCL_DEBUG(4, "nfsio_writedsmir: error=%d\n", error);
 	return (error);
 }
@@ -8154,7 +8164,9 @@ nfsrpc_createlayout(vnode_t dvp, char *name, int namelen, struct vattr *vap,
 		stateid.other[0] = *tl++;
 		stateid.other[1] = *tl++;
 		stateid.other[2] = *tl;
-		nfsrv_getattrbits(nd, &attrbits, NULL, NULL);
+		error = nfsrv_getattrbits(nd, &attrbits, NULL, NULL);
+		if (error != 0)
+			goto nfsmout;
 		NFSM_DISSECT(tl, u_int32_t *, NFSX_UNSIGNED);
 		deleg = fxdr_unsigned(int, *tl);
 		if (deleg == NFSV4OPEN_DELEGATEREAD ||

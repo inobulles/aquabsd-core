@@ -739,6 +739,15 @@ extern int bus_current_pass;
 void	bus_set_pass(int pass);
 
 /**
+ * Routines to lock / unlock the newbus lock.
+ * Must be taken out to interact with newbus.
+ */
+void bus_topo_lock(void);
+void bus_topo_unlock(void);
+struct mtx * bus_topo_mtx(void);
+void bus_topo_assert(void);
+
+/**
  * Shorthands for constructing method tables.
  */
 #define	DEVMETHOD	KOBJMETHOD
@@ -768,7 +777,7 @@ struct driver_module_data {
 
 #define	EARLY_DRIVER_MODULE_ORDERED(name, busname, driver, devclass,	\
     evh, arg, order, pass)						\
-									\
+								\
 static struct driver_module_data name##_##busname##_driver_mod = {	\
 	evh, arg,							\
 	#busname,							\

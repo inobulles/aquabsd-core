@@ -40,6 +40,12 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20211221 efi_set_variables_supported.3 should be efi_variables_supported.3
+OLD_FILES+=usr/share/man/man3/efi_set_variables_supported.3.gz
+
+# 20211218 meteor.4 removed, see also 20200301 entry below
+OLD_FILES+=usr/share/man/man4/meteor.4.gz
+
 # 20211125 Old SCSI drivers removed
 OLD_FILES+=usr/share/man/man4/amr.4.gz
 OLD_FILES+=usr/share/man/man4/esp.4.gz
@@ -7639,8 +7645,6 @@ OLD_FILES+=usr/share/openssl/man/man3/d2i_ECPrivate_key.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/d2i_Netscape_RSA.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/d2i_PKCS8PrivateKey.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/d2i_Private_key.3.gz
-OLD_FILES+=usr/share/openssl/man/man3/d2i_X509_bio.3.gz
-OLD_FILES+=usr/share/openssl/man/man3/d2i_X509_fp.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/des.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/des_read_2passwords.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/des_read_password.3.gz
@@ -7657,8 +7661,6 @@ OLD_FILES+=usr/share/openssl/man/man3/hmac.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/i2d_ECPKParameters_bio.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/i2d_ECPKParameters_fp.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/i2d_Netscape_RSA.3.gz
-OLD_FILES+=usr/share/openssl/man/man3/i2d_X509_bio.3.gz
-OLD_FILES+=usr/share/openssl/man/man3/i2d_X509_fp.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/lh_delete.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/lh_doall.3.gz
 OLD_FILES+=usr/share/openssl/man/man3/lh_doall_arg.3.gz
