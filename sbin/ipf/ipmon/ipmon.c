@@ -300,65 +300,62 @@ static icmp_type_t icmptypes6[] = {
 	{ -2,			NULL,	0,		NULL }
 };
 
-static icmp_subtype_t *find_icmpsubtype(type, table, tablesz)
-	int type;
-	icmp_subtype_t *table;
-	size_t tablesz;
+static icmp_subtype_t *
+find_icmpsubtype(int type, icmp_subtype_t *table, size_t tablesz)
 {
 	icmp_subtype_t *ist;
 	int i;
 
 	if (tablesz < 2)
-		return NULL;
+		return (NULL);
 
 	if ((type < 0) || (type > table[tablesz - 2].ist_val))
-		return NULL;
+		return (NULL);
 
 	i = type;
 	if (table[type].ist_val == type)
-		return table + type;
+		return (table + type);
 
 	for (i = 0, ist = table; ist->ist_val != -2; i++, ist++)
 		if (ist->ist_val == type)
-			return ist;
-	return NULL;
+			return (ist);
+	return (NULL);
 }
 
 
-static icmp_type_t *find_icmptype(type, table, tablesz)
-	int type;
-	icmp_type_t *table;
-	size_t tablesz;
+static icmp_type_t *
+find_icmptype(int type, icmp_type_t *table, size_t tablesz)
 {
 	icmp_type_t *it;
 	int i;
 
 	if (tablesz < 2)
-		return NULL;
+		return (NULL);
 
 	if ((type < 0) || (type > table[tablesz - 2].it_val))
-		return NULL;
+		return (NULL);
 
 	i = type;
 	if (table[type].it_val == type)
-		return table + type;
+		return (table + type);
 
 	for (i = 0, it = table; it->it_val != -2; i++, it++)
 		if (it->it_val == type)
-			return it;
-	return NULL;
+			return (it);
+	return (NULL);
 }
 
 
-static void handlehup(sig)
-	int sig;
+static void
+handlehup(int sig)
 {
 	signal(SIGHUP, handlehup);
 	donehup = 1;
 }
 
 
-static void init_tabs()
+static void
+init_tabs(void)
 {
 	struct	protoent	*p;
 	struct	servent	*s;
@@ -438,8 +435,8 @@ static void init_tabs()
 }
 
 
-static char *getlocalproto(p)
-	u_int p;
+static char *
+getlocalproto(u_int p)
 {
 	static char pnum[4];
 	char *s;
@@ -447,16 +444,15 @@ static char *getlocalproto(p)
 	p &= 0xff;
 	s = protocols ? protocols[p] : NULL;
 	if (s == NULL) {
-		snprintf(pnum, sizeof(pnum), "%u", p);
+		sprintf(pnum, "%u", p);
 		s = pnum;
 	}
-	return s;
+	return (s);
 }
 
 
-static int read_log(fd, lenp, buf, bufsize)
-	int fd, bufsize, *lenp;
-	char *buf;
+static int
+read_log(int fd, int *lenp, char *buf, int bufsize)
 {
 	int	nr;
 
@@ -465,15 +461,16 @@ static int read_log(fd, lenp, buf, bufsize)
 
 	nr = read(fd, buf, bufsize);
 	if (!nr)
-		return 2;
+		return (2);
 	if ((nr < 0) && (errno != EINTR))
-		return -1;
+		return (-1);
 	*lenp = nr;
-	return 0;
+	return (0);
 }
 
 
-char *portlocalname(res, proto, port)
+char *
+portlocalname(res, proto, port)
 	int res;
 	char *proto;
 	u_int port;
@@ -483,9 +480,9 @@ char *portlocalname(res, proto, port)
 
 	port = ntohs(port);
 	port &= 0xffff;
-	snprintf(pname, sizeof(pname), "%u", port);
+	sprintf(pname, "%u", port);
 	if (!res || (ipmonopts & IPMON_PORTNUM))
-		return pname;
+		return (pname);
 	s = NULL;
 	if (!strcmp(proto, "tcp"))
 		s = tcp_ports[port];
@@ -493,13 +490,12 @@ char *portlocalname(res, proto, port)
 		s = udp_ports[port];
 	if (s == NULL)
 		s = pname;
-	return s;
+	return (s);
 }
 
 
-static char *icmpname(type, code)
-	u_int type;
-	u_int code;
+static char *
+icmpname(u_int type, u_int code)
 {
 	static char name[80];
 	icmp_subtype_t *ist;
@@ -512,9 +508,9 @@ static char *icmpname(type, code)
 		s = it->it_name;
 
 	if (s == NULL)
-		snprintf(name, sizeof(name), "icmptype(%d)/", type);
+		sprintf(name, "icmptype(%d)/", type);
 	else
-		snprintf(name, sizeof(name), "%s/", s);
+		sprintf(name, "%s/", s);
 
 	ist = NULL;
 	if (it != NULL && it->it_subtable != NULL)
@@ -522,17 +518,14 @@ static char *icmpname(type, code)
 
 	if (ist != NULL && ist->ist_name != NULL)
 		strcat(name, ist->ist_name);
-	else {
-		int strlen_name = strlen(name);
-		snprintf(name + strlen_name, sizeof(name) - strlen_name, "%d", code);
-	}
+	else
+		sprintf(name + strlen(name), "%d", code);
 
-	return name;
+	return (name);
 }
 
-static char *icmpname6(type, code)
-	u_int type;
-	u_int code;
+static char *
+icmpname6(u_int type, u_int code)
 {
 	static char name[80];
 	icmp_subtype_t *ist;
@@ -545,9 +538,9 @@ static char *icmpname6(type, code)
 		s = it->it_name;
 
 	if (s == NULL)
-		snprintf(name, sizeof(name), "icmpv6type(%d)/", type);
+		sprintf(name, "icmpv6type(%d)/", type);
 	else
-		snprintf(name, sizeof(name), "%s/", s);
+		sprintf(name, "%s/", s);
 
 	ist = NULL;
 	if (it != NULL && it->it_subtable != NULL)
@@ -555,20 +548,15 @@ static char *icmpname6(type, code)
 
 	if (ist != NULL && ist->ist_name != NULL)
 		strcat(name, ist->ist_name);
-	else {
-		int strlen_name = strlen(name);
-		snprintf(name + strlen_name, sizeof(name) - strlen_name, "%d", code);
-	}
+	else
+		sprintf(name + strlen(name), "%d", code);
 
-	return name;
+	return (name);
 }
 
 
-void dumphex(log, dopts, buf, len)
-	FILE *log;
-	int dopts;
-	char *buf;
-	int len;
+void
+dumphex(FILE *log, int dopts, char *buf, int len)
 {
 	char	hline[80];
 	int	i, j, k;
@@ -628,21 +616,19 @@ void dumphex(log, dopts, buf, len)
 }
 
 
-static struct tm *get_tm(sec)
-	time_t sec;
+static struct tm *
+get_tm(time_t sec)
 {
 	struct tm *tm;
 	time_t t;
 
 	t = sec;
 	tm = localtime(&t);
-	return tm;
+	return (tm);
 }
 
-static void print_natlog(conf, buf, blen)
-	config_t *conf;
-	char *buf;
-	int blen;
+static void
+print_natlog(config_t *conf, char *buf, int blen)
 {
 	static u_32_t seqnum = 0;
 	int res, i, len, family;
@@ -684,7 +670,7 @@ static void print_natlog(conf, buf, blen)
 	}
 	(void) strftime(t, len, "%T", tm);
 	t += strlen(t);
-	snprintf(t, sizeof(t), ".%-.6ld @%hd ", (long)ipl->ipl_usec, nl->nl_rule + 1);
+	sprintf(t, ".%-.6ld @%hd ", (long)ipl->ipl_usec, nl->nl_rule + 1);
 	t += strlen(t);
 
 	switch (nl->nl_action)
@@ -714,7 +700,7 @@ static void print_natlog(conf, buf, blen)
 		break;
 
 	default :
-		snprintf(t, sizeof(t), "NAT:Action(%d)", nl->nl_action);
+		sprintf(t, "NAT:Action(%d)", nl->nl_action);
 		break;
 	}
 	t += strlen(t);
@@ -767,7 +753,7 @@ static void print_natlog(conf, buf, blen)
 		break;
 
 	default :
-		snprintf(t, sizeof(t), "-Type(%d) ", nl->nl_type);
+		sprintf(t, "-Type(%d) ", nl->nl_type);
 		break;
 	}
 	t += strlen(t);
@@ -777,25 +763,25 @@ static void print_natlog(conf, buf, blen)
 	family = vtof(nl->nl_v[0]);
 
 	if (simple == 1) {
-		snprintf(t, sizeof(t), "%s,%s <- -> ", hostname(family, nl->nl_osrcip.i6),
+		sprintf(t, "%s,%s <- -> ", hostname(family, nl->nl_osrcip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_osrcport));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s,%s ", hostname(family, nl->nl_nsrcip.i6),
+		sprintf(t, "%s,%s ", hostname(family, nl->nl_nsrcip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_nsrcport));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "[%s,%s] ", hostname(family, nl->nl_odstip.i6),
+		sprintf(t, "[%s,%s] ", hostname(family, nl->nl_odstip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_odstport));
 	} else {
-		snprintf(t, sizeof(t), "%s,%s ", hostname(family, nl->nl_osrcip.i6),
+		sprintf(t, "%s,%s ", hostname(family, nl->nl_osrcip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_osrcport));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s,%s <- -> ", hostname(family, nl->nl_odstip.i6),
+		sprintf(t, "%s,%s <- -> ", hostname(family, nl->nl_odstip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_odstport));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s,%s ", hostname(family, nl->nl_nsrcip.i6),
+		sprintf(t, "%s,%s ", hostname(family, nl->nl_nsrcip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_nsrcport));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s,%s ", hostname(family, nl->nl_ndstip.i6),
+		sprintf(t, "%s,%s ", hostname(family, nl->nl_ndstip.i6),
 			portlocalname(res, proto, (u_int)nl->nl_ndstport));
 	}
 	t += strlen(t);
@@ -806,13 +792,13 @@ static void print_natlog(conf, buf, blen)
 	if (nl->nl_action == NL_EXPIRE || nl->nl_action == NL_FLUSH) {
 #ifdef	USE_QUAD_T
 # ifdef	PRId64
-		snprintf(t, sizeof(t), " Pkts %" PRId64 "/%" PRId64 " Bytes %" PRId64 "/%"
+		sprintf(t, " Pkts %" PRId64 "/%" PRId64 " Bytes %" PRId64 "/%"
 			PRId64,
 # else
-		snprintf(t, sizeof(t), " Pkts %qd/%qd Bytes %qd/%qd",
+		sprintf(t, " Pkts %qd/%qd Bytes %qd/%qd",
 # endif
 #else
-		snprintf(t, sizeof(t), " Pkts %ld/%ld Bytes %ld/%ld",
+		sprintf(t, " Pkts %ld/%ld Bytes %ld/%ld",
 #endif
 				nl->nl_pkts[0], nl->nl_pkts[1],
 				nl->nl_bytes[0], nl->nl_bytes[1]);
@@ -828,10 +814,8 @@ static void print_natlog(conf, buf, blen)
 }
 
 
-static void print_statelog(conf, buf, blen)
-	config_t *conf;
-	char *buf;
-	int blen;
+static void
+print_statelog(config_t *conf, char *buf, int blen)
 {
 	static u_32_t seqnum = 0;
 	int res, i, len, family;
@@ -869,7 +853,7 @@ static void print_statelog(conf, buf, blen)
 	}
 	(void) strftime(t, len, "%T", tm);
 	t += strlen(t);
-	snprintf(t, sizeof(t), ".%-.6ld ", (long)ipl->ipl_usec);
+	sprintf(t, ".%-.6ld ", (long)ipl->ipl_usec);
 	t += strlen(t);
 
 	family = vtof(sl->isl_v);
@@ -914,7 +898,7 @@ static void print_statelog(conf, buf, blen)
 		break;
 
 	default :
-		snprintf(t, sizeof(t), "Type: %d ", sl->isl_type);
+		sprintf(t, "Type: %d ", sl->isl_type);
 		break;
 	}
 	t += strlen(t);
@@ -922,38 +906,38 @@ static void print_statelog(conf, buf, blen)
 	proto = getlocalproto(sl->isl_p);
 
 	if (sl->isl_p == IPPROTO_TCP || sl->isl_p == IPPROTO_UDP) {
-		snprintf(t, sizeof(t), "%s,%s -> ",
+		sprintf(t, "%s,%s -> ",
 			hostname(family, (u_32_t *)&sl->isl_src),
 			portlocalname(res, proto, (u_int)sl->isl_sport));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s,%s PR %s",
+		sprintf(t, "%s,%s PR %s",
 			hostname(family, (u_32_t *)&sl->isl_dst),
 			portlocalname(res, proto, (u_int)sl->isl_dport), proto);
 	} else if (sl->isl_p == IPPROTO_ICMP) {
-		snprintf(t, sizeof(t), "%s -> ", hostname(family, (u_32_t *)&sl->isl_src));
+		sprintf(t, "%s -> ", hostname(family, (u_32_t *)&sl->isl_src));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s PR icmp %d",
+		sprintf(t, "%s PR icmp %d",
 			hostname(family, (u_32_t *)&sl->isl_dst),
 			sl->isl_itype);
 	} else if (sl->isl_p == IPPROTO_ICMPV6) {
-		snprintf(t, sizeof(t), "%s -> ", hostname(family, (u_32_t *)&sl->isl_src));
+		sprintf(t, "%s -> ", hostname(family, (u_32_t *)&sl->isl_src));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s PR icmpv6 %d",
+		sprintf(t, "%s PR icmpv6 %d",
 			hostname(family, (u_32_t *)&sl->isl_dst),
 			sl->isl_itype);
 	} else {
-		snprintf(t, sizeof(t), "%s -> ", hostname(family, (u_32_t *)&sl->isl_src));
+		sprintf(t, "%s -> ", hostname(family, (u_32_t *)&sl->isl_src));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s PR %s",
+		sprintf(t, "%s PR %s",
 			hostname(family, (u_32_t *)&sl->isl_dst), proto);
 	}
 	t += strlen(t);
 	if (sl->isl_tag != FR_NOLOGTAG) {
-		snprintf(t, sizeof(t), " tag %u", sl->isl_tag);
+		sprintf(t, " tag %u", sl->isl_tag);
 		t += strlen(t);
 	}
 	if (sl->isl_type != ISL_NEW) {
-		snprintf(t, sizeof(t),
+		sprintf(t,
 #ifdef	USE_QUAD_T
 #ifdef	PRId64
 			" Forward: Pkts in %" PRId64 " Bytes in %" PRId64
@@ -983,11 +967,8 @@ static void print_statelog(conf, buf, blen)
 }
 
 
-static void print_log(conf, log, buf, blen)
-	config_t *conf;
-	logsource_t *log;
-	char *buf;
-	int blen;
+static void
+print_log(config_t *conf, logsource_t *log, char *buf, int blen)
 {
 	char *bp, *bpo;
 	iplog_t	*ipl;
@@ -1042,10 +1023,8 @@ static void print_log(conf, log, buf, blen)
 }
 
 
-static void print_ipflog(conf, buf, blen)
-	config_t *conf;
-	char *buf;
-	int blen;
+static void
+print_ipflog(config_t *conf, char *buf, int blen)
 {
 	static u_32_t seqnum = 0;
 	int i, f, lvl, res, len, off, plen, ipoff, defaction;
@@ -1099,10 +1078,10 @@ static void print_ipflog(conf, buf, blen)
 	}
 	(void) strftime(t, len, "%T", tm);
 	t += strlen(t);
-	snprintf(t, sizeof(t), ".%-.6ld ", (long)ipl->ipl_usec);
+	sprintf(t, ".%-.6ld ", (long)ipl->ipl_usec);
 	t += strlen(t);
 	if (ipl->ipl_count > 1) {
-		snprintf(t, sizeof(t), "%dx ", ipl->ipl_count);
+		sprintf(t, "%dx ", ipl->ipl_count);
 		t += strlen(t);
 	}
 	{
@@ -1110,11 +1089,11 @@ static void print_ipflog(conf, buf, blen)
 
 	strncpy(ifname, ipf->fl_ifname, sizeof(ipf->fl_ifname));
 	ifname[sizeof(ipf->fl_ifname)] = '\0';
-	snprintf(t, sizeof(t), "%s", ifname);
+	sprintf(t, "%s", ifname);
 	t += strlen(t);
 # if SOLARIS
 		if (ISALPHA(*(t - 1))) {
-			snprintf(t, sizeof(t), "%d", ipf->fl_unit);
+			sprintf(t, "%d", ipf->fl_unit);
 			t += strlen(t);
 		}
 # endif
@@ -1124,12 +1103,12 @@ static void print_ipflog(conf, buf, blen)
 	else if (ipf->fl_group[0] == '\0')
 		(void) strcpy(t, " @0:");
 	else
-		snprintf(t, sizeof(t), " @%s:", ipf->fl_group);
+		sprintf(t, " @%s:", ipf->fl_group);
 	t += strlen(t);
 	if (ipf->fl_rule == 0xffffffff)
 		strcat(t, "-1 ");
 	else
-		snprintf(t, sizeof(t), "%u ", ipf->fl_rule + 1);
+		sprintf(t, "%u ", ipf->fl_rule + 1);
 	t += strlen(t);
 
 	lvl = LOG_NOTICE;
@@ -1216,10 +1195,10 @@ static void print_ipflog(conf, buf, blen)
 	if ((p == IPPROTO_TCP || p == IPPROTO_UDP) && !off) {
 		tp = (tcphdr_t *)((char *)ip + hl);
 		if (!(ipf->fl_lflags & FI_SHORT)) {
-			snprintf(t, sizeof(t), "%s,%s -> ", hostname(f, s),
+			sprintf(t, "%s,%s -> ", hostname(f, s),
 				portlocalname(res, proto, (u_int)tp->th_sport));
 			t += strlen(t);
-			snprintf(t, sizeof(t), "%s,%s PR %s len %hu %hu",
+			sprintf(t, "%s,%s PR %s len %hu %hu",
 				hostname(f, d),
 				portlocalname(res, proto, (u_int)tp->th_dport),
 				proto, hl, plen);
@@ -1232,7 +1211,7 @@ static void print_ipflog(conf, buf, blen)
 					if (tp->th_flags & tcpfl[i].value)
 						*t++ = tcpfl[i].flag;
 				if (ipmonopts & IPMON_VERBOSE) {
-					snprintf(t, sizeof(t), " %lu %lu %hu",
+					sprintf(t, " %lu %lu %hu",
 						(u_long)(ntohl(tp->th_seq)),
 						(u_long)(ntohl(tp->th_ack)),
 						ntohs(tp->th_win));
@@ -1241,7 +1220,7 @@ static void print_ipflog(conf, buf, blen)
 			}
 			*t = '\0';
 		} else {
-			snprintf(t, sizeof(t), "%s -> ", hostname(f, s));
+			sprintf(t, "%s -> ", hostname(f, s));
 			t += strlen(t);
 			sprintf(t, "%s PR %s len %hu %hu",
 				hostname(f, d), proto, hl, plen);
@@ -1249,17 +1228,17 @@ static void print_ipflog(conf, buf, blen)
 #if defined(AF_INET6) && defined(IPPROTO_ICMPV6)
 	} else if ((p == IPPROTO_ICMPV6) && !off && (f == AF_INET6)) {
 		ic = (struct icmp *)((char *)ip + hl);
-		snprintf(t, sizeof(t), "%s -> ", hostname(f, s));
+		sprintf(t, "%s -> ", hostname(f, s));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s PR icmpv6 len %hu %hu icmpv6 %s",
+		sprintf(t, "%s PR icmpv6 len %hu %hu icmpv6 %s",
 			hostname(f, d), hl, plen,
 			icmpname6(ic->icmp_type, ic->icmp_code));
 #endif
 	} else if ((p == IPPROTO_ICMP) && !off && (f == AF_INET)) {
 		ic = (struct icmp *)((char *)ip + hl);
-		snprintf(t, sizeof(t), "%s -> ", hostname(f, s));
+		sprintf(t, "%s -> ", hostname(f, s));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s PR icmp len %hu %hu icmp %s",
+		sprintf(t, "%s PR icmp len %hu %hu icmp %s",
 			hostname(f, d), hl, plen,
 			icmpname(ic->icmp_type, ic->icmp_code));
 		if (ic->icmp_type == ICMP_UNREACH ||
@@ -1283,12 +1262,12 @@ static void print_ipflog(conf, buf, blen)
 			     (ipc->ip_p == IPPROTO_UDP))) {
 				tp = (tcphdr_t *)((char *)ipc + hl);
 				t += strlen(t);
-				snprintf(t, sizeof(t), " for %s,%s -",
+				sprintf(t, " for %s,%s -",
 					HOSTNAMEV4(ipc->ip_src),
 					portlocalname(res, proto,
 						 (u_int)tp->th_sport));
 				t += strlen(t);
-				snprintf(t, sizeof(t), " %s,%s PR %s len %hu %hu",
+				sprintf(t, " %s,%s PR %s len %hu %hu",
 					HOSTNAMEV4(ipc->ip_dst),
 					portlocalname(res, proto,
 						 (u_int)tp->th_dport),
@@ -1298,25 +1277,25 @@ static void print_ipflog(conf, buf, blen)
 				icmp = (icmphdr_t *)((char *)ipc + hl);
 
 				t += strlen(t);
-				snprintf(t, sizeof(t), " for %s -",
+				sprintf(t, " for %s -",
 					HOSTNAMEV4(ipc->ip_src));
 				t += strlen(t);
-				snprintf(t, sizeof(t),
+				sprintf(t,
 					" %s PR icmp len %hu %hu icmp %d/%d",
 					HOSTNAMEV4(ipc->ip_dst),
 					IP_HL(ipc) << 2, i,
 					icmp->icmp_type, icmp->icmp_code);
 			} else {
 				t += strlen(t);
-				snprintf(t, sizeof(t), " for %s -",
+				sprintf(t, " for %s -",
 					HOSTNAMEV4(ipc->ip_src));
 				t += strlen(t);
-				snprintf(t, sizeof(t), " %s PR %s len %hu (%hu)",
+				sprintf(t, " %s PR %s len %hu (%hu)",
 					HOSTNAMEV4(ipc->ip_dst), proto,
 					IP_HL(ipc) << 2, i);
 				t += strlen(t);
 				if (ipoff & IP_OFFMASK) {
-					snprintf(t, sizeof(t), "(frag %d:%hu@%hu%s%s)",
+					sprintf(t, "(frag %d:%hu@%hu%s%s)",
 						ntohs(ipc->ip_id),
 						i - (IP_HL(ipc) << 2),
 						(ipoff & IP_OFFMASK) << 3,
@@ -1327,13 +1306,13 @@ static void print_ipflog(conf, buf, blen)
 
 		}
 	} else {
-		snprintf(t, sizeof(t), "%s -> ", hostname(f, s));
+		sprintf(t, "%s -> ", hostname(f, s));
 		t += strlen(t);
-		snprintf(t, sizeof(t), "%s PR %s len %hu (%hu)",
+		sprintf(t, "%s PR %s len %hu (%hu)",
 			hostname(f, d), proto, hl, plen);
 		t += strlen(t);
 		if (off & IP_OFFMASK)
-			snprintf(t, sizeof(t), " (frag %d:%hu@%hu%s%s)",
+			sprintf(t, " (frag %d:%hu@%hu%s%s)",
 				ntohs(ip->ip_id),
 				plen - hl, (off & IP_OFFMASK) << 3,
 				ipoff & IP_MF ? "+" : "",
@@ -1358,7 +1337,7 @@ printipflog:
 		strcpy(t, " OUT");
 	t += strlen(t);
 	if (ipf->fl_logtag != 0) {
-		snprintf(t, sizeof(t), " log-tag %d", ipf->fl_logtag);
+		sprintf(t, " log-tag %d", ipf->fl_logtag);
 		t += strlen(t);
 	}
 	if (ipf->fl_nattag.ipt_num[0] != 0) {
@@ -1439,8 +1418,8 @@ printipflog:
 }
 
 
-static void usage(prog)
-	char *prog;
+static void
+usage(char *prog)
 {
 	fprintf(stderr, "Usage: %s [ -abDFhnpstvxX ] [ -B <binary-logfile> ] [ -C <config-file> ]\n"
 		"\t[ -f <device> ] [ -L <facility> ] [ -N <device> ]\n"
@@ -1450,8 +1429,8 @@ static void usage(prog)
 }
 
 
-static void write_pid(file)
-	char *file;
+static void
+write_pid(char *file)
 {
 	FILE *fp = NULL;
 	int fd;
@@ -1470,9 +1449,8 @@ static void write_pid(file)
 }
 
 
-static void flushlogs(file, log)
-	char *file;
-	FILE *log;
+static void
+flushlogs(char *file, FILE *log)
 {
 	int	fd, flushed = 0;
 
@@ -1501,9 +1479,8 @@ static void flushlogs(file, log)
 }
 
 
-static void logopts(turnon, options)
-	int turnon;
-	char *options;
+static void
+logopts(int turnon, char *options)
 {
 	int flags = 0;
 	char *s;
@@ -1533,7 +1510,8 @@ static void logopts(turnon, options)
 		ipmonopts &= ~(flags);
 }
 
-static void initconfig(config_t *conf)
+static void
+initconfig(config_t *conf)
 {
 	int i;
 
@@ -1561,9 +1539,8 @@ static void initconfig(config_t *conf)
 }
 
 
-int main(argc, argv)
-	int argc;
-	char *argv[];
+int
+main(int argc, char *argv[])
 {
 	int	doread, c, make_daemon = 0;
 	char	*prog;
@@ -1740,12 +1717,13 @@ int main(argc, argv)
 
 	unload_config();
 
-	return(0);
+	return (0);
 	/* NOTREACHED */
 }
 
 
-static void openlogs(config_t *conf)
+static void
+openlogs(config_t *conf)
 {
 	logsource_t *l;
 	struct stat sb;
@@ -1785,7 +1763,8 @@ static void openlogs(config_t *conf)
 }
 
 
-static int read_loginfo(config_t *conf)
+static int
+read_loginfo(config_t *conf)
 {
 	iplog_t buf[DEFAULT_IPFLOGSIZE/sizeof(iplog_t)+1];
 	int n, tr, nr, i;
@@ -1796,11 +1775,11 @@ static int read_loginfo(config_t *conf)
 
 	n = select(conf->maxfd + 1, &fdr, NULL, NULL, NULL);
 	if (n == 0)
-		return 1;
+		return (1);
 	if (n == -1) {
 		if (errno == EINTR)
-			return 1;
-		return -1;
+			return (1);
+		return (-1);
 	}
 
 	for (i = 0, nr = 0; i < 3; i++) {
@@ -1813,7 +1792,7 @@ static int read_loginfo(config_t *conf)
 		if (l->regular) {
 			tr = (lseek(l->fd, 0, SEEK_CUR) < l->size);
 			if (!tr && !(ipmonopts & IPMON_TAIL))
-				return 0;
+				return (0);
 		}
 
 		n = 0;
@@ -1849,13 +1828,13 @@ static int read_loginfo(config_t *conf)
 			else {
 				ipferror(l->fd, "read");
 			}
-			return 0;
+			return (0);
 		case 1 :
 			if (ipmonopts & IPMON_SYSLOG)
 				syslog(LOG_CRIT, "aborting logging\n");
 			else if (conf->log != NULL)
 				fprintf(conf->log, "aborting logging\n");
-			return 0;
+			return (0);
 		case 2 :
 			break;
 		case 0 :
@@ -1872,5 +1851,5 @@ static int read_loginfo(config_t *conf)
 	if (!nr && (ipmonopts & IPMON_TAIL))
 		sleep(1);
 
-	return 1;
+	return (1);
 }

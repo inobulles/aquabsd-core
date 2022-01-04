@@ -931,6 +931,8 @@ fuse_internal_do_getattr(struct vnode *vp, struct vattr *vap,
 	enum vtype vtyp;
 	int err;
 
+	ASSERT_VOP_LOCKED(vp, __func__);
+
 	fdisp_init(&fdi, sizeof(*fgai));
 	fdisp_make_vp(&fdi, FUSE_GETATTR, vp, td, cred);
 	fgai = fdi.indata;
@@ -1072,6 +1074,10 @@ fuse_internal_init_callback(struct fuse_ticket *tick, struct uio *uio)
 		fsess_set_notimpl(data->mp, FUSE_DESTROY);
 	}
 
+	if (!fuse_libabi_geq(data, 7, 19)) {
+		fsess_set_notimpl(data->mp, FUSE_FALLOCATE);
+	}
+
 	if (fuse_libabi_geq(data, 7, 23) && fiio->time_gran >= 1 &&
 	    fiio->time_gran <= 1000000000)
 		data->time_gran = fiio->time_gran;
@@ -1168,6 +1174,8 @@ int fuse_internal_setattr(struct vnode *vp, struct vattr *vap,
 	enum vtype vtyp;
 	int sizechanged = -1;
 	uint64_t newsize = 0;
+
+	ASSERT_VOP_ELOCKED(vp, __func__);
 
 	mp = vnode_mount(vp);
 	fvdat = VTOFUD(vp);
@@ -1271,6 +1279,7 @@ int fuse_internal_setattr(struct vnode *vp, struct vattr *vap,
 		fuse_vnode_undirty_cached_timestamps(vp, true);
 		fuse_internal_cache_attrs(vp, &fao->attr, fao->attr_valid,
 			fao->attr_valid_nsec, NULL, false);
+		getnanouptime(&fvdat->last_local_modify);
 	}
 
 out:

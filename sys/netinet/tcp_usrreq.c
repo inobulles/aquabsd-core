@@ -896,21 +896,20 @@ tcp_usr_shutdown(struct socket *so)
 	struct epoch_tracker et;
 
 	TCPDEBUG0;
-	NET_EPOCH_ENTER(et);
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("inp == NULL"));
 	INP_WLOCK(inp);
-	tp = intotcpcb(inp);
 	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
-		error = ECONNRESET;
-		goto out;
+		INP_WUNLOCK(inp);
+		return (ECONNRESET);
 	}
+	tp = intotcpcb(inp);
+	NET_EPOCH_ENTER(et);
 	TCPDEBUG1();
 	socantsendmore(so);
 	tcp_usrclosed(tp);
 	if (!(inp->inp_flags & INP_DROPPED))
 		error = tcp_output_nodrop(tp);
-out:
 	TCPDEBUG2(PRU_SHUTDOWN);
 	TCP_PROBE2(debug__user, tp, PRU_SHUTDOWN);
 	error = tcp_unlock_or_drop(tp, error);
@@ -934,12 +933,12 @@ tcp_usr_rcvd(struct socket *so, int flags)
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("tcp_usr_rcvd: inp == NULL"));
 	INP_WLOCK(inp);
-	NET_EPOCH_ENTER(et);
-	tp = intotcpcb(inp);
 	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
-		error = ECONNRESET;
-		goto out;
+		INP_WUNLOCK(inp);
+		return (ECONNRESET);
 	}
+	tp = intotcpcb(inp);
+	NET_EPOCH_ENTER(et);
 	TCPDEBUG1();
 	/*
 	 * For passively-created TFO connections, don't attempt a window
@@ -994,34 +993,31 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 	bool restoreflags;
 	TCPDEBUG0;
 
-	/*
-	 * We require the pcbinfo "read lock" if we will close the socket
-	 * as part of this call.
-	 */
-	NET_EPOCH_ENTER(et);
-	inp = sotoinpcb(so);
-	KASSERT(inp != NULL, ("tcp_usr_send: inp == NULL"));
-	INP_WLOCK(inp);
-	tp = intotcpcb(inp);
-	vflagsav = inp->inp_vflag;
-	incflagsav = inp->inp_inc.inc_flags;
-	restoreflags = false;
-	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
-		if (control)
-			m_freem(control);
-		error = ECONNRESET;
-		goto out;
-	}
 	if (control != NULL) {
 		/* TCP doesn't do control messages (rights, creds, etc) */
 		if (control->m_len) {
 			m_freem(control);
-			error = EINVAL;
-			goto out;
+			return (EINVAL);
 		}
 		m_freem(control);	/* empty control, just free it */
-		control = NULL;
 	}
+
+	inp = sotoinpcb(so);
+	KASSERT(inp != NULL, ("tcp_usr_send: inp == NULL"));
+	INP_WLOCK(inp);
+	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
+		if (m != NULL && (flags & PRUS_NOTREADY) == 0)
+			m_freem(m);
+		INP_WUNLOCK(inp);
+		return (ECONNRESET);
+	}
+
+	vflagsav = inp->inp_vflag;
+	incflagsav = inp->inp_inc.inc_flags;
+	restoreflags = false;
+	tp = intotcpcb(inp);
+
+	NET_EPOCH_ENTER(et);
 	if ((flags & PRUS_OOB) != 0 &&
 	    (error = tcp_pru_options_support(tp, PRUS_OOB)) != 0)
 		goto out;

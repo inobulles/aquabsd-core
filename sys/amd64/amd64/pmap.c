@@ -8290,7 +8290,7 @@ pmap_remove_pages(pmap_t pmap)
 		other_cpus = all_cpus;
 		critical_enter();
 		CPU_CLR(PCPU_GET(cpuid), &other_cpus);
-		CPU_AND(&other_cpus, &pmap->pm_active);
+		CPU_AND(&other_cpus, &other_cpus, &pmap->pm_active);
 		critical_exit();
 		KASSERT(CPU_EMPTY(&other_cpus), ("pmap active %p", pmap));
 	}
@@ -8567,6 +8567,11 @@ pmap_is_prefaultable(pmap_t pmap, vm_offset_t addr)
 	boolean_t rv;
 
 	PG_V = pmap_valid_bit(pmap);
+
+	/*
+	 * Return TRUE if and only if the PTE for the specified virtual
+	 * address is allocated but invalid.
+	 */
 	rv = FALSE;
 	PMAP_LOCK(pmap);
 	pde = pmap_pde(pmap, addr);

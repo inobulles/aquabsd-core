@@ -4449,6 +4449,7 @@ iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
 				iflib_stop(ctx);
 			STATE_LOCK(ctx);
 			if_togglecapenable(ifp, setmask);
+			ctx->ifc_softc_ctx.isc_capenable ^= setmask;
 			STATE_UNLOCK(ctx);
 			if (bits & IFF_DRV_RUNNING && setmask & ~IFCAP_WOL)
 				iflib_init_locked(ctx);
@@ -4969,7 +4970,7 @@ get_ctx_core_offset(if_ctx_t ctx)
 	for (i = 0; i < scctx->isc_nrxqsets; i++)
 		CPU_SET(get_cpuid_for_queue(ctx, first_valid, i, false),
 		    &assigned_cpus);
-	CPU_AND(&assigned_cpus, &ctx->ifc_cpus);
+	CPU_AND(&assigned_cpus, &assigned_cpus, &ctx->ifc_cpus);
 	cores_consumed = CPU_COUNT(&assigned_cpus);
 
 	mtx_lock(&cpu_offset_mtx);

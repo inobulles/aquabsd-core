@@ -114,8 +114,6 @@ struct sync_list {
 	bus_size_t	datacount;	/* client data count */
 };
 
-int busdma_swi_pending;
-
 struct bounce_zone {
 	STAILQ_ENTRY(bounce_zone) links;
 	STAILQ_HEAD(bp_list, bounce_page) bounce_page_list;
@@ -151,6 +149,7 @@ static counter_u64_t maploads_physmem;
 #endif
 
 static STAILQ_HEAD(, bounce_zone) bounce_zone_list;
+static void *busdma_ih;
 
 SYSCTL_NODE(_hw, OID_AUTO, busdma, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
     "Busdma parameters");
@@ -319,7 +318,7 @@ static __inline int
 alignment_bounce(bus_dma_tag_t dmat, bus_addr_t addr)
 {
 
-	return (addr & (dmat->alignment - 1));
+	return (!vm_addr_align_ok(addr, dmat->alignment));
 }
 
 /*
@@ -1008,18 +1007,13 @@ static int
 _bus_dmamap_addseg(bus_dma_tag_t dmat, bus_dmamap_t map, bus_addr_t curaddr,
     bus_size_t sgsize, bus_dma_segment_t *segs, int *segp)
 {
-	bus_addr_t baddr, bmask;
 	int seg;
 
 	/*
 	 * Make sure we don't cross any boundaries.
 	 */
-	bmask = ~(dmat->boundary - 1);
-	if (dmat->boundary > 0) {
-		baddr = (curaddr + dmat->boundary) & bmask;
-		if (sgsize > (baddr - curaddr))
-			sgsize = (baddr - curaddr);
-	}
+	if (!vm_addr_bound_ok(curaddr, sgsize, dmat->boundary))
+		sgsize = roundup2(curaddr, dmat->boundary) - curaddr;
 
 	/*
 	 * Insert chunk into a segment, coalescing with
@@ -1033,8 +1027,8 @@ _bus_dmamap_addseg(bus_dma_tag_t dmat, bus_dmamap_t map, bus_addr_t curaddr,
 	} else {
 		if (curaddr == segs[seg].ds_addr + segs[seg].ds_len &&
 		    (segs[seg].ds_len + sgsize) <= dmat->maxsegsz &&
-		    (dmat->boundary == 0 ||
-		    (segs[seg].ds_addr & bmask) == (curaddr & bmask)))
+		    vm_addr_bound_ok(segs[seg].ds_addr,
+		    segs[seg].ds_len + sgsize, dmat->boundary))
 			segs[seg].ds_len += sgsize;
 		else {
 			if (++seg >= dmat->nsegments)
@@ -1714,6 +1708,7 @@ free_bounce_page(bus_dma_tag_t dmat, struct bounce_page *bpage)
 {
 	struct bus_dmamap *map;
 	struct bounce_zone *bz;
+	bool schedule_swi;
 
 	bz = dmat->bounce_zone;
 	bpage->datavaddr = 0;
@@ -1728,6 +1723,7 @@ free_bounce_page(bus_dma_tag_t dmat, struct bounce_page *bpage)
 		bpage->busaddr &= ~PAGE_MASK;
 	}
 
+	schedule_swi = false;
 	mtx_lock(&bounce_lock);
 	STAILQ_INSERT_HEAD(&bz->bounce_page_list, bpage, links);
 	bz->free_bpages++;
@@ -1737,16 +1733,17 @@ free_bounce_page(bus_dma_tag_t dmat, struct bounce_page *bpage)
 			STAILQ_REMOVE_HEAD(&bounce_map_waitinglist, links);
 			STAILQ_INSERT_TAIL(&bounce_map_callbacklist,
 			    map, links);
-			busdma_swi_pending = 1;
 			bz->total_deferred++;
-			swi_sched(vm_ih, 0);
+			schedule_swi = true;
 		}
 	}
 	mtx_unlock(&bounce_lock);
+	if (schedule_swi)
+		swi_sched(busdma_ih, 0);
 }
 
-void
-busdma_swi(void)
+static void
+busdma_swi(void *dummy __unused)
 {
 	bus_dma_tag_t dmat;
 	struct bus_dmamap *map;
@@ -1764,3 +1761,13 @@ busdma_swi(void)
 	}
 	mtx_unlock(&bounce_lock);
 }
+
+static void
+start_busdma_swi(void *dummy __unused)
+{
+	if (swi_add(NULL, "busdma", busdma_swi, NULL, SWI_BUSDMA, INTR_MPSAFE,
+	    &busdma_ih))
+		panic("died while creating busdma swi ithread");
+}
+SYSINIT(start_busdma_swi, SI_SUB_SOFTINTR, SI_ORDER_ANY, start_busdma_swi,
+    NULL);

@@ -3625,6 +3625,9 @@ uma_zalloc_smr(uma_zone_t zone, int flags)
 	uma_cache_bucket_t bucket;
 	uma_cache_t cache;
 
+	CTR3(KTR_UMA, "uma_zalloc_smr zone %s(%p) flags %d", zone->uz_name,
+	    zone, flags);
+
 #ifdef UMA_ZALLOC_DEBUG
 	void *item;
 
@@ -4379,6 +4382,9 @@ uma_zfree_smr(uma_zone_t zone, void *item)
 	uma_cache_bucket_t bucket;
 	int itemdomain, uz_flags;
 
+	CTR3(KTR_UMA, "uma_zfree_smr zone %s(%p) item %p",
+	    zone->uz_name, zone, item);
+
 #ifdef UMA_ZALLOC_DEBUG
 	KASSERT((zone->uz_flags & UMA_ZONE_SMR) != 0,
 	    ("uma_zfree_smr: called with non-SMR zone."));
@@ -4430,7 +4436,8 @@ uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 	/* Enable entropy collection for RANDOM_ENABLE_UMA kernel option */
 	random_harvest_fast_uma(&zone, sizeof(zone), RANDOM_UMA);
 
-	CTR2(KTR_UMA, "uma_zfree_arg zone %s(%p)", zone->uz_name, zone);
+	CTR3(KTR_UMA, "uma_zfree_arg zone %s(%p) item %p",
+	    zone->uz_name, zone, item);
 
 #ifdef UMA_ZALLOC_DEBUG
 	KASSERT((zone->uz_flags & UMA_ZONE_SMR) == 0,

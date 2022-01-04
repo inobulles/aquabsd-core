@@ -913,6 +913,12 @@ native_lapic_calibrate_timer(void)
 	struct lapic *la;
 	register_t intr;
 
+#ifdef DEV_ATPIC
+	/* Fail if the local APIC is not present. */
+	if (!x2apic_mode && lapic_map == NULL)
+		return;
+#endif
+
 	intr = intr_disable();
 	la = &lapics[lapic_id()];
 
@@ -932,9 +938,11 @@ native_lapic_enable_pmc(void)
 #ifdef HWPMC_HOOKS
 	u_int32_t maxlvt;
 
+#ifdef DEV_ATPIC
 	/* Fail if the local APIC is not present. */
 	if (!x2apic_mode && lapic_map == NULL)
 		return (0);
+#endif
 
 	/* Fail if the PMC LVT is not present. */
 	maxlvt = (lapic_read32(LAPIC_VERSION) & APIC_VER_MAXLVT) >> MAXLVTSHIFT;
@@ -971,9 +979,11 @@ native_lapic_disable_pmc(void)
 #ifdef HWPMC_HOOKS
 	u_int32_t maxlvt;
 
+#ifdef DEV_ATPIC
 	/* Fail if the local APIC is not present. */
 	if (!x2apic_mode && lapic_map == NULL)
 		return;
+#endif
 
 	/* Fail if the PMC LVT is not present. */
 	maxlvt = (lapic_read32(LAPIC_VERSION) & APIC_VER_MAXLVT) >> MAXLVTSHIFT;

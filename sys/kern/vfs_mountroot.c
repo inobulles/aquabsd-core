@@ -986,6 +986,7 @@ vfs_mountroot_wait(void)
 
 	curfail = 0;
 	lastfail.tv_sec = 0;
+	ppsratecheck(&lastfail, &curfail, 1);
 	while (1) {
 		g_waitidle();
 		mtx_lock(&root_holds_mtx);
@@ -1004,6 +1005,7 @@ vfs_mountroot_wait(void)
 		    hz);
 		TSUNWAIT("root mount");
 	}
+	g_waitidle();
 
 	TSEXIT();
 }
@@ -1038,6 +1040,8 @@ vfs_mountroot_wait_if_neccessary(const char *fs, const char *dev)
 	 * to behave exactly as it used to work before.
 	 */
 	vfs_mountroot_wait();
+	if (parse_mount_dev_present(dev))
+		return (0);
 	printf("mountroot: waiting for device %s...\n", dev);
 	delay = hz / 10;
 	timeout = root_mount_timeout * hz;
