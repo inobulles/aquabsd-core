@@ -28,8 +28,8 @@
  *
  * $FreeBSD$
  */
-#ifndef	_LINUX_BITOPS_H_
-#define	_LINUX_BITOPS_H_
+#ifndef	_LINUXKPI_LINUX_BITOPS_H_
+#define	_LINUXKPI_LINUX_BITOPS_H_
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -84,6 +84,12 @@ static inline int
 __ffsl(long mask)
 {
 	return (ffsl(mask) - 1);
+}
+
+static inline unsigned long
+__ffs64(uint64_t mask)
+{
+	return (ffsll(mask) - 1);
 }
 
 static inline int
@@ -420,4 +426,4 @@ sign_extend32(uint32_t value, int index)
 	return ((int32_t)(value << shift) >> shift);
 }
 
-#endif	/* _LINUX_BITOPS_H_ */
+#endif	/* _LINUXKPI_LINUX_BITOPS_H_ */

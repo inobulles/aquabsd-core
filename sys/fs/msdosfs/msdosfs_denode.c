@@ -142,9 +142,24 @@ deget(struct msdosfsmount *pmp, u_long dirclust, u_long diroffset,
 		return (error);
 	if (nvp != NULL) {
 		*depp = VTODE(nvp);
-		KASSERT((*depp)->de_dirclust == dirclust, ("wrong dirclust"));
-		KASSERT((*depp)->de_diroffset == diroffset, ("wrong diroffset"));
+		if ((*depp)->de_dirclust != dirclust) {
+			printf("%s: wrong dir cluster %lu %lu\n",
+			    pmp->pm_mountp->mnt_stat.f_mntonname,
+			    (*depp)->de_dirclust, dirclust);
+			goto badoff;
+		}
+		if ((*depp)->de_diroffset != diroffset) {
+			printf("%s: wrong dir offset %lu %lu\n",
+			    pmp->pm_mountp->mnt_stat.f_mntonname,
+			    (*depp)->de_diroffset,  diroffset);
+			goto badoff;
+		}
 		return (0);
+badoff:
+		vgone(nvp);
+		vput(nvp);
+		msdosfs_integrity_error(pmp);
+		return (EBADF);
 	}
 	ldep = malloc(sizeof(struct denode), M_MSDOSFSNODE, M_WAITOK | M_ZERO);
 
@@ -166,7 +181,7 @@ deget(struct msdosfsmount *pmp, u_long dirclust, u_long diroffset,
 	ldep->de_diroffset = diroffset;
 	ldep->de_inode = inode;
 	cluster_init_vn(&ldep->de_clusterw);
-	lockmgr(nvp->v_vnlock, LK_EXCLUSIVE, NULL);
+	lockmgr(nvp->v_vnlock, LK_EXCLUSIVE | LK_NOWITNESS, NULL);
 	VN_LOCK_AREC(nvp);	/* for doscheckpath */
 	fc_purge(ldep, 0);	/* init the FAT cache for this denode */
 	error = insmntque(nvp, mntp);
@@ -191,9 +206,9 @@ deget(struct msdosfsmount *pmp, u_long dirclust, u_long diroffset,
 	/*
 	 * Copy the directory entry into the denode area of the vnode.
 	 */
-	if ((dirclust == MSDOSFSROOT
-	     || (FAT32(pmp) && dirclust == pmp->pm_rootdirblk))
-	    && diroffset == MSDOSFSROOT_OFS) {
+	if ((dirclust == MSDOSFSROOT ||
+	    (FAT32(pmp) && dirclust == pmp->pm_rootdirblk)) &&
+	    diroffset == MSDOSFSROOT_OFS) {
 		/*
 		 * Directory entry for the root directory. There isn't one,
 		 * so we manufacture one. We should probably rummage
@@ -372,7 +387,7 @@ detrunc(struct denode *dep, u_long length, int flags, struct ucred *cred)
 
 	if (dep->de_FileSize < length) {
 		vnode_pager_setsize(DETOV(dep), length);
-		return deextend(dep, length, cred);
+		return (deextend(dep, length, cred));
 	}
 
 	/*
@@ -462,7 +477,7 @@ detrunc(struct denode *dep, u_long length, int flags, struct ucred *cred)
 			return (error);
 		}
 		fc_setcache(dep, FC_LASTFC, de_cluster(pmp, length - 1),
-			    eofentry);
+		    eofentry);
 	}
 
 	/*

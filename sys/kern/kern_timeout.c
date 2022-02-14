@@ -57,6 +57,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/proc.h>
+#include <sys/random.h>
 #include <sys/sched.h>
 #include <sys/sdt.h>
 #include <sys/sleepqueue.h>
@@ -430,12 +431,16 @@ callout_get_bucket(sbintime_t sbt)
 void
 callout_process(sbintime_t now)
 {
+	struct callout_entropy {
+		struct callout_cpu *cc;
+		struct thread *td;
+		sbintime_t now;
+	} entropy;
 	struct callout *tmp, *tmpn;
 	struct callout_cpu *cc;
 	struct callout_list *sc;
 	struct thread *td;
-	sbintime_t first, last, max, tmp_max;
-	uint32_t lookahead;
+	sbintime_t first, last, lookahead, max, tmp_max;
 	u_int firstb, lastb, nowb;
 #ifdef CALLOUT_PROFILING
 	int depth_dir = 0, mpcalls_dir = 0, lockcalls_dir = 0;
@@ -455,7 +460,7 @@ callout_process(sbintime_t now)
 	else if (nowb - firstb == 1)
 		lookahead = (SBT_1S / 8);
 	else
-		lookahead = (SBT_1S / 2);
+		lookahead = SBT_1S;
 	first = last = now;
 	first += (lookahead / 2);
 	last += lookahead;
@@ -546,6 +551,11 @@ next:
 	avg_lockcalls_dir += (lockcalls_dir * 1000 - avg_lockcalls_dir) >> 8;
 #endif
 	if (!TAILQ_EMPTY(&cc->cc_expireq)) {
+		entropy.cc = cc;
+		entropy.td = curthread;
+		entropy.now = now;
+		random_harvest_queue(&entropy, sizeof(entropy), RANDOM_CALLOUT);
+
 		td = cc->cc_thread;
 		if (TD_AWAITING_INTR(td)) {
 			thread_lock_block_wait(td);

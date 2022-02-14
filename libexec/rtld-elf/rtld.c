@@ -1002,10 +1002,6 @@ rtld_resolve_ifunc(const Obj_Entry *obj, const Elf_Sym *def)
 	return ((void *)target);
 }
 
-/*
- * NB: MIPS uses a private version of this function (_mips_rtld_bind).
- * Changes to this function should be applied there as well.
- */
 Elf_Addr
 _rtld_bind(Obj_Entry *obj, Elf_Size reloff)
 {
@@ -1179,10 +1175,26 @@ origin_subst_one(Obj_Entry *obj, char *real, const char *kw,
 	return (res);
 }
 
+static const struct {
+	const char *kw;
+	bool pass_obj;
+	const char *subst;
+} tokens[] = {
+	{ .kw = "$ORIGIN", .pass_obj = true, .subst = NULL },
+	{ .kw = "${ORIGIN}", .pass_obj = true, .subst = NULL },
+	{ .kw = "$OSNAME", .pass_obj = false, .subst = uts.sysname },
+	{ .kw = "${OSNAME}", .pass_obj = false, .subst = uts.sysname },
+	{ .kw = "$OSREL", .pass_obj = false, .subst = uts.release },
+	{ .kw = "${OSREL}", .pass_obj = false, .subst = uts.release },
+	{ .kw = "$PLATFORM", .pass_obj = false, .subst = uts.machine },
+	{ .kw = "${PLATFORM}", .pass_obj = false, .subst = uts.machine },
+};
+
 static char *
 origin_subst(Obj_Entry *obj, const char *real)
 {
-	char *res1, *res2, *res3, *res4;
+	char *res;
+	int i;
 
 	if (obj == NULL || !trust)
 		return (xstrdup(real));
@@ -1192,13 +1204,14 @@ origin_subst(Obj_Entry *obj, const char *real)
 			return (NULL);
 		}
 	}
+
 	/* __DECONST is safe here since without may_free real is unchanged */
-	res1 = origin_subst_one(obj, __DECONST(char *, real), "$ORIGIN", NULL,
-	    false);
-	res2 = origin_subst_one(NULL, res1, "$OSNAME", uts.sysname, true);
-	res3 = origin_subst_one(NULL, res2, "$OSREL", uts.release, true);
-	res4 = origin_subst_one(NULL, res3, "$PLATFORM", uts.machine, true);
-	return (res4);
+	res = __DECONST(char *, real);
+	for (i = 0; i < (int)nitems(tokens); i++) {
+		res = origin_subst_one(tokens[i].pass_obj ? obj : NULL,
+		    res, tokens[i].kw, tokens[i].subst, i == 0);
+	}
+	return (res);
 }
 
 void
@@ -1465,18 +1478,11 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 	    obj->fini_array_num = dynp->d_un.d_val / sizeof(Elf_Addr);
 	    break;
 
-	/*
-	 * Don't process DT_DEBUG on MIPS as the dynamic section
-	 * is mapped read-only. DT_MIPS_RLD_MAP is used instead.
-	 */
-
-#ifndef __mips__
 	case DT_DEBUG:
 	    if (!early)
 		dbg("Filling in DT_DEBUG entry");
 	    (__DECONST(Elf_Dyn *, dynp))->d_un.d_ptr = (Elf_Addr)&r_debug;
 	    break;
-#endif
 
 	case DT_FLAGS:
 		if (dynp->d_un.d_val & DF_ORIGIN)
@@ -1490,36 +1496,6 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 		if (dynp->d_un.d_val & DF_STATIC_TLS)
 		    obj->static_tls = true;
 	    break;
-#ifdef __mips__
-	case DT_MIPS_LOCAL_GOTNO:
-		obj->local_gotno = dynp->d_un.d_val;
-		break;
-
-	case DT_MIPS_SYMTABNO:
-		obj->symtabno = dynp->d_un.d_val;
-		break;
-
-	case DT_MIPS_GOTSYM:
-		obj->gotsym = dynp->d_un.d_val;
-		break;
-
-	case DT_MIPS_RLD_MAP:
-		*((Elf_Addr *)(dynp->d_un.d_ptr)) = (Elf_Addr) &r_debug;
-		break;
-
-	case DT_MIPS_RLD_MAP_REL:
-		// The MIPS_RLD_MAP_REL tag stores the offset to the .rld_map
-		// section relative to the address of the tag itself.
-		*((Elf_Addr *)(__DECONST(char*, dynp) + dynp->d_un.d_val)) =
-		    (Elf_Addr) &r_debug;
-		break;
-
-	case DT_MIPS_PLTGOT:
-		obj->mips_pltgot = (Elf_Addr *)(obj->relocbase +
-		    dynp->d_un.d_ptr);
-		break;
-		
-#endif
 
 #ifdef __powerpc__
 #ifdef __powerpc64__
@@ -2397,10 +2373,7 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
     objtmp.dynamic = rtld_dynamic(&objtmp);
     digest_dynamic1(&objtmp, 1, &dyn_rpath, &dyn_soname, &dyn_runpath);
     assert(objtmp.needed == NULL);
-#if !defined(__mips__)
-    /* MIPS has a bogus DT_TEXTREL. */
     assert(!objtmp.textrel);
-#endif
     /*
      * Temporarily put the dynamic linker entry into the object list, so
      * that symbols can be found.
@@ -4777,11 +4750,9 @@ matched_symbol(SymLook *req, const Obj_Entry *obj, Sym_Match_Result *result,
 	case STT_TLS:
 		if (symp->st_shndx != SHN_UNDEF)
 			break;
-#ifndef __mips__
 		else if (((req->flags & SYMLOOK_IN_PLT) == 0) &&
 		    (ELF_ST_TYPE(symp->st_info) == STT_FUNC))
 			break;
-#endif
 		/* fallthrough */
 	default:
 		return (false);

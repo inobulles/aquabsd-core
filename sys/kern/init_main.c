@@ -424,6 +424,7 @@ struct sysentvec null_sysvec = {
 	.sv_maxuser	= VM_MAXUSER_ADDRESS,
 	.sv_usrstack	= USRSTACK,
 	.sv_psstrings	= PS_STRINGS,
+	.sv_psstringssz	= sizeof(struct ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_strings	= NULL,
 	.sv_setregs	= NULL,
@@ -437,6 +438,8 @@ struct sysentvec null_sysvec = {
 	.sv_thread_detach = NULL,
 	.sv_trap	= NULL,
 	.sv_set_fork_retval = null_set_fork_retval,
+	.sv_regset_begin = NULL,
+	.sv_regset_end  = NULL,
 };
 
 /*
@@ -565,7 +568,7 @@ proc0_init(void *dummy __unused)
 
 	/* Create the file descriptor table. */
 	p->p_pd = pdinit(NULL, false);
-	p->p_fd = fdinit(NULL, false, NULL);
+	p->p_fd = fdinit();
 	p->p_fdtol = NULL;
 
 	/* Create the limits structures. */

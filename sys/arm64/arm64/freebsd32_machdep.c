@@ -27,7 +27,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/exec.h>
 #include <sys/proc.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -41,6 +42,15 @@ __FBSDID("$FreeBSD$");
 #endif
 #include <compat/freebsd32/freebsd32_proto.h>
 #include <compat/freebsd32/freebsd32_signal.h>
+
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
+
+_Static_assert(sizeof(mcontext32_t) == 208, "mcontext32_t size incorrect");
+_Static_assert(sizeof(ucontext32_t) == 260, "ucontext32_t size incorrect");
+_Static_assert(sizeof(struct siginfo32) == 64, "struct siginfo32 size incorrect");
 
 extern void freebsd32_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask);
 
@@ -192,14 +202,34 @@ set_mcontext32(struct thread *td, mcontext32_t *mcp)
 {
 	struct trapframe *tf;
 	mcontext32_vfp_t mc_vfp;
+	uint32_t spsr;
 	int i;
 
 	tf = td->td_frame;
 
+	spsr = mcp->mc_gregset[16];
+	/*
+	 * There is no PSR_SS in the 32-bit kernel so ignore it if it's set
+	 * as we will set it later if needed.
+	 */
+	if ((spsr & ~(PSR_SETTABLE_32 | PSR_SS)) !=
+	    (tf->tf_spsr & ~(PSR_SETTABLE_32 | PSR_SS)))
+		return (EINVAL);
+
+	spsr &= PSR_SETTABLE_32;
+	spsr |= tf->tf_spsr & ~PSR_SETTABLE_32;
+
+	if ((td->td_dbgflags & TDB_STEP) != 0) {
+		spsr |= PSR_SS;
+		td->td_pcb->pcb_flags |= PCB_SINGLE_STEP;
+		WRITE_SPECIALREG(mdscr_el1,
+		    READ_SPECIALREG(mdscr_el1) | MDSCR_SS);
+	}
+
 	for (i = 0; i < 15; i++)
 		tf->tf_x[i] = mcp->mc_gregset[i];
 	tf->tf_elr = mcp->mc_gregset[15];
-	tf->tf_spsr = mcp->mc_gregset[16];
+	tf->tf_spsr = spsr;
 #ifdef VFP
 	if (mcp->mc_vfp_size == sizeof(mc_vfp) && mcp->mc_vfp_ptr != 0) {
 		if (copyin((void *)(uintptr_t)mcp->mc_vfp_ptr, &mc_vfp,
@@ -390,13 +420,21 @@ freebsd32_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	if (sysent->sv_sigcode_base != 0)
 		tf->tf_x[14] = (register_t)sysent->sv_sigcode_base;
 	else
-		tf->tf_x[14] = (register_t)(sysent->sv_psstrings -
+		tf->tf_x[14] = (register_t)(PROC_PS_STRINGS(p) -
 		    *(sysent->sv_szsigcode));
 	/* Set the mode to enter in the signal handler */
 	if ((register_t)catcher & 1)
 		tf->tf_spsr |= PSR_T;
 	else
 		tf->tf_spsr &= ~PSR_T;
+
+	/* Clear the single step flag while in the signal handler */
+	if ((td->td_pcb->pcb_flags & PCB_SINGLE_STEP) != 0) {
+		td->td_pcb->pcb_flags &= ~PCB_SINGLE_STEP;
+		WRITE_SPECIALREG(mdscr_el1,
+		    READ_SPECIALREG(mdscr_el1) & ~MDSCR_SS);
+		isb();
+	}
 
 	CTR3(KTR_SIG, "sendsig: return td=%p pc=%#x sp=%#x", td, tf->tf_x[14],
 	    tf->tf_x[13]);

@@ -1122,6 +1122,7 @@ t4_attach(device_t dev)
 
 	sc = device_get_softc(dev);
 	sc->dev = dev;
+	sysctl_ctx_init(&sc->ctx);
 	TUNABLE_INT_FETCH("hw.cxgbe.dflags", &sc->debug_flags);
 
 	if ((pci_get_device(dev) & 0xff00) == 0x5400)
@@ -1175,10 +1176,10 @@ t4_attach(device_t dev)
 
 	TASK_INIT(&sc->reset_task, 0, reset_adapter, sc);
 
-	sc->ctrlq_oid = SYSCTL_ADD_NODE(device_get_sysctl_ctx(sc->dev),
+	sc->ctrlq_oid = SYSCTL_ADD_NODE(&sc->ctx,
 	    SYSCTL_CHILDREN(device_get_sysctl_tree(sc->dev)), OID_AUTO, "ctrlq",
 	    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "control queues");
-	sc->fwq_oid = SYSCTL_ADD_NODE(device_get_sysctl_ctx(sc->dev),
+	sc->fwq_oid = SYSCTL_ADD_NODE(&sc->ctx,
 	    SYSCTL_CHILDREN(device_get_sysctl_tree(sc->dev)), OID_AUTO, "fwq",
 	    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "firmware event queue");
 
@@ -1663,10 +1664,7 @@ notify_siblings(device_t dev, int detaching)
 static int
 t4_detach(device_t dev)
 {
-	struct adapter *sc;
 	int rc;
-
-	sc = device_get_softc(dev);
 
 	rc = notify_siblings(dev, 1);
 	if (rc) {
@@ -1735,6 +1733,7 @@ t4_detach_common(device_t dev)
 	}
 
 	device_delete_children(dev);
+	sysctl_ctx_free(&sc->ctx);
 	adapter_full_uninit(sc);
 
 	if ((sc->flags & (IS_VF | FW_OK)) == FW_OK)
@@ -1920,13 +1919,15 @@ t4_suspend(device_t dev)
 
 		for_each_vi(pi, j, vi) {
 			vi->xact_addr_filt = -1;
+			mtx_lock(&vi->tick_mtx);
+			vi->flags |= VI_SKIP_STATS;
+			mtx_unlock(&vi->tick_mtx);
 			if (!(vi->flags & VI_INIT_DONE))
 				continue;
 
 			ifp = vi->ifp;
 			if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
 				mtx_lock(&vi->tick_mtx);
-				vi->flags |= VI_SKIP_STATS;
 				callout_stop(&vi->tick);
 				mtx_unlock(&vi->tick_mtx);
 				callout_drain(&vi->tick);
@@ -2257,6 +2258,9 @@ t4_resume(device_t dev)
 		for_each_port(sc, i) {
 			pi = sc->port[i];
 			for_each_vi(pi, j, vi) {
+				mtx_lock(&vi->tick_mtx);
+				vi->flags &= ~VI_SKIP_STATS;
+				mtx_unlock(&vi->tick_mtx);
 				if (!(vi->flags & VI_INIT_DONE))
 					continue;
 				rc = vi_full_init(vi);
@@ -2293,7 +2297,6 @@ t4_resume(device_t dev)
 					TXQ_UNLOCK(txq);
 				}
 				mtx_lock(&vi->tick_mtx);
-				vi->flags &= ~VI_SKIP_STATS;
 				callout_schedule(&vi->tick, hz);
 				mtx_unlock(&vi->tick_mtx);
 			}
@@ -2416,12 +2419,12 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 {
 	struct ifnet *ifp;
 	struct sbuf *sb;
-	struct sysctl_ctx_list *ctx;
+	struct sysctl_ctx_list *ctx = &vi->ctx;
 	struct sysctl_oid_list *children;
 	struct pfil_head_args pa;
 	struct adapter *sc = vi->adapter;
 
-	ctx = device_get_sysctl_ctx(vi->dev);
+	sysctl_ctx_init(ctx);
 	children = SYSCTL_CHILDREN(device_get_sysctl_tree(vi->dev));
 	vi->rxq_oid = SYSCTL_ADD_NODE(ctx, children, OID_AUTO, "rxq",
 	    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "NIC rx queues");
@@ -2568,6 +2571,8 @@ cxgbe_attach(device_t dev)
 	struct vi_info *vi;
 	int i, rc;
 
+	sysctl_ctx_init(&pi->ctx);
+
 	rc = cxgbe_vi_attach(dev, &pi->vi[0]);
 	if (rc)
 		return (rc);
@@ -2609,6 +2614,7 @@ cxgbe_vi_detach(struct vi_info *vi)
 #endif
 	cxgbe_uninit_synchronized(vi);
 	callout_drain(&vi->tick);
+	sysctl_ctx_free(&vi->ctx);
 	vi_full_uninit(vi);
 
 	if_free(vi->ifp);
@@ -2628,6 +2634,7 @@ cxgbe_detach(device_t dev)
 		return (rc);
 	device_delete_children(dev);
 
+	sysctl_ctx_free(&pi->ctx);
 	doom_vi(sc, &pi->vi[0]);
 
 	if (pi->flags & HAS_TRACEQ) {
@@ -2872,7 +2879,7 @@ fail:
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:
 	case SIOCGIFXMEDIA:
-		ifmedia_ioctl(ifp, ifr, &pi->media, cmd);
+		rc = ifmedia_ioctl(ifp, ifr, &pi->media, cmd);
 		break;
 
 	case SIOCGI2C: {
@@ -3162,7 +3169,7 @@ cxgbe_media_change(struct ifnet *ifp)
 		if (IFM_OPTIONS(ifm->ifm_media) & IFM_ETH_TXPAUSE)
 			lc->requested_fc |= PAUSE_TX;
 	}
-	if (pi->up_vis > 0) {
+	if (pi->up_vis > 0 && !hw_off_limits(sc)) {
 		fixup_link_config(pi);
 		rc = apply_link_config(pi);
 	}
@@ -3330,7 +3337,7 @@ cxgbe_media_status(struct ifnet *ifp, struct ifmediareq *ifmr)
 		return;
 	PORT_LOCK(pi);
 
-	if (pi->up_vis == 0) {
+	if (pi->up_vis == 0 && !hw_off_limits(sc)) {
 		/*
 		 * If all the interfaces are administratively down the firmware
 		 * does not report transceiver changes.  Refresh port info here
@@ -6472,11 +6479,6 @@ adapter_full_init(struct adapter *sc)
 
 	ASSERT_SYNCHRONIZED_OP(sc);
 
-	if (!(sc->flags & ADAP_SYSCTL_CTX)) {
-		sysctl_ctx_init(&sc->ctx);
-		sc->flags |= ADAP_SYSCTL_CTX;
-	}
-
 	/*
 	 * queues that belong to the adapter (not any particular port).
 	 */
@@ -6530,12 +6532,6 @@ static void
 adapter_full_uninit(struct adapter *sc)
 {
 	int i;
-
-	/* Do this before freeing the adapter queues. */
-	if (sc->flags & ADAP_SYSCTL_CTX) {
-		sysctl_ctx_free(&sc->ctx);
-		sc->flags &= ~ADAP_SYSCTL_CTX;
-	}
 
 	t4_teardown_adapter_queues(sc);
 
@@ -6628,11 +6624,6 @@ vi_full_init(struct vi_info *vi)
 #endif
 
 	ASSERT_SYNCHRONIZED_OP(sc);
-
-	if (!(vi->flags & VI_SYSCTL_CTX)) {
-		sysctl_ctx_init(&vi->ctx);
-		vi->flags |= VI_SYSCTL_CTX;
-	}
 
 	/*
 	 * Allocate tx/rx/fl queues for this VI.
@@ -6765,12 +6756,6 @@ vi_full_uninit(struct vi_info *vi)
 		quiesce_vi(vi);
 		free(vi->rss, M_CXGBE);
 		free(vi->nm_rss, M_CXGBE);
-	}
-
-	/* Do this before freeing the VI queues. */
-	if (vi->flags & VI_SYSCTL_CTX) {
-		sysctl_ctx_free(&vi->ctx);
-		vi->flags &= ~VI_SYSCTL_CTX;
 	}
 
 	t4_teardown_vi_queues(vi);
@@ -7038,7 +7023,7 @@ vi_refresh_stats(struct vi_info *vi)
 
 	mtx_assert(&vi->tick_mtx, MA_OWNED);
 
-	if (!(vi->flags & VI_INIT_DONE) || vi->flags & VI_SKIP_STATS)
+	if (vi->flags & VI_SKIP_STATS)
 		return;
 
 	getmicrotime(&tv);
@@ -7135,12 +7120,10 @@ static char *caps_decoder[] = {
 void
 t4_sysctls(struct adapter *sc)
 {
-	struct sysctl_ctx_list *ctx;
+	struct sysctl_ctx_list *ctx = &sc->ctx;
 	struct sysctl_oid *oid;
 	struct sysctl_oid_list *children, *c0;
 	static char *doorbells = {"\20\1UDB\2WCWR\3UDBWC\4KDB"};
-
-	ctx = device_get_sysctl_ctx(sc->dev);
 
 	/*
 	 * dev.t4nex.X.
@@ -7652,11 +7635,9 @@ t4_sysctls(struct adapter *sc)
 void
 vi_sysctls(struct vi_info *vi)
 {
-	struct sysctl_ctx_list *ctx;
+	struct sysctl_ctx_list *ctx = &vi->ctx;
 	struct sysctl_oid *oid;
 	struct sysctl_oid_list *children;
-
-	ctx = device_get_sysctl_ctx(vi->dev);
 
 	/*
 	 * dev.v?(cxgbe|cxl).X.
@@ -7757,15 +7738,13 @@ vi_sysctls(struct vi_info *vi)
 static void
 cxgbe_sysctls(struct port_info *pi)
 {
-	struct sysctl_ctx_list *ctx;
+	struct sysctl_ctx_list *ctx = &pi->ctx;
 	struct sysctl_oid *oid;
 	struct sysctl_oid_list *children, *children2;
 	struct adapter *sc = pi->adapter;
 	int i;
 	char name[16];
 	static char *tc_flags = {"\20\1USER"};
-
-	ctx = device_get_sysctl_ctx(pi->dev);
 
 	/*
 	 * dev.cxgbe.X.

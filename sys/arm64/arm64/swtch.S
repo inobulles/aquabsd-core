@@ -41,7 +41,7 @@ __FBSDID("$FreeBSD$");
 .macro clear_step_flag pcbflags, tmp
 	tbz	\pcbflags, #PCB_SINGLE_STEP_SHIFT, 999f
 	mrs	\tmp, mdscr_el1
-	bic	\tmp, \tmp, #1
+	bic	\tmp, \tmp, #MDSCR_SS
 	msr	mdscr_el1, \tmp
 	isb
 999:
@@ -50,7 +50,7 @@ __FBSDID("$FreeBSD$");
 .macro set_step_flag pcbflags, tmp
 	tbz	\pcbflags, #PCB_SINGLE_STEP_SHIFT, 999f
 	mrs	\tmp, mdscr_el1
-	orr	\tmp, \tmp, #1
+	orr	\tmp, \tmp, #MDSCR_SS
 	msr	mdscr_el1, \tmp
 	isb
 999:
@@ -71,13 +71,16 @@ ENTRY(cpu_throw)
 
 #ifdef VFP
 	/* Backup the new thread pointer around a call to C code */
-	mov	x19, x0
-	mov	x20, x1
+	mov	x19, x1
 	bl	vfp_discard
-	mov	x1, x20
 	mov	x0, x19
+#else
+	mov	x0, x1
 #endif
 
+	/* This returns the thread pointer so no need to save it */
+	bl	ptrauth_switch
+	/* This returns the thread pcb */
 	bl	pmap_switch
 	mov	x4, x0
 
@@ -153,10 +156,14 @@ ENTRY(cpu_switch)
 	/* Load the pcb address */
 	mov	x1, x4
 	bl	vfp_save_state
-	mov	x1, x20
-	mov	x0, x19
+	mov	x0, x20
+#else
+	mov	x0, x1
 #endif
 
+	/* This returns the thread pointer so no need to save it */
+	bl	ptrauth_switch
+	/* This returns the thread pcb */
 	bl	pmap_switch
 	/* Move the new pcb out of the way */
 	mov	x4, x0
@@ -213,10 +220,14 @@ ENTRY(fork_trampoline)
 	bl	_C_LABEL(fork_exit)
 
 	/*
-	 * Disable interrupts to avoid
-	 * overwriting spsr_el1 and sp_el0 by an IRQ exception.
+	 * Disable interrupts as we are setting userspace specific
+	 * state that we won't handle correctly in an interrupt while
+	 * in the kernel.
 	 */
 	msr	daifset, #(DAIF_D | DAIF_INTR)
+
+	ldr	x0, [x18, #PC_CURTHREAD]
+	bl	ptrauth_enter_el0
 
 	/* Restore sp, lr, elr, and spsr */
 	ldp	x18, lr, [sp, #TF_SP]

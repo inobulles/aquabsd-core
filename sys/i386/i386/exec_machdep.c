@@ -115,6 +115,10 @@ static void freebsd4_sendsig(sig_t catcher, ksiginfo_t *, sigset_t *mask);
 
 extern struct sysentvec elf32_freebsd_sysvec;
 
+_Static_assert(sizeof(mcontext_t) == 640, "mcontext_t size incorrect");
+_Static_assert(sizeof(ucontext_t) == 704, "ucontext_t size incorrect");
+_Static_assert(sizeof(siginfo_t) == 64, "siginfo_t size incorrect");
+
 /*
  * Send an interrupt to process.
  *
@@ -238,7 +242,7 @@ osendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 		    szosigcode;
 	} else {
 		/* a.out sysentvec does not use shared page */
-		regs->tf_eip = p->p_sysent->sv_psstrings - szosigcode;
+		regs->tf_eip = PROC_PS_STRINGS(p) - szosigcode;
 	}
 	regs->tf_eflags &= ~(PSL_T | PSL_D);
 	regs->tf_cs = _ucodesel;
@@ -256,7 +260,7 @@ osendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 static void
 freebsd4_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 {
-	struct sigframe4 sf, *sfp;
+	struct freebsd4_sigframe sf, *sfp;
 	struct proc *p;
 	struct thread *td;
 	struct sigacts *psp;
@@ -291,13 +295,13 @@ freebsd4_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	/* Allocate space for the signal handler context. */
 	if ((td->td_pflags & TDP_ALTSTACK) != 0 && !oonstack &&
 	    SIGISMEMBER(psp->ps_sigonstack, sig)) {
-		sfp = (struct sigframe4 *)((uintptr_t)td->td_sigstk.ss_sp +
-		    td->td_sigstk.ss_size - sizeof(struct sigframe4));
+		sfp = (struct freebsd4_sigframe *)((uintptr_t)td->td_sigstk.ss_sp +
+		    td->td_sigstk.ss_size - sizeof(struct freebsd4_sigframe));
 #if defined(COMPAT_43)
 		td->td_sigstk.ss_flags |= SS_ONSTACK;
 #endif
 	} else
-		sfp = (struct sigframe4 *)regs->tf_esp - 1;
+		sfp = (struct freebsd4_sigframe *)regs->tf_esp - 1;
 
 	/* Build the argument list for the signal handler. */
 	sf.sf_signum = sig;
@@ -523,7 +527,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	regs->tf_esp = (int)sfp;
 	regs->tf_eip = p->p_sysent->sv_sigcode_base;
 	if (regs->tf_eip == 0)
-		regs->tf_eip = p->p_sysent->sv_psstrings - szsigcode;
+		regs->tf_eip = PROC_PS_STRINGS(p) - szsigcode;
 	regs->tf_eflags &= ~(PSL_T | PSL_D);
 	regs->tf_cs = _ucodesel;
 	regs->tf_ds = _udatasel;

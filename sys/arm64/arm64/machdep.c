@@ -374,6 +374,7 @@ init_proc0(vm_offset_t kstack)
 	thread0.td_pcb->pcb_fpusaved = &thread0.td_pcb->pcb_fpustate;
 	thread0.td_pcb->pcb_vfpcpu = UINT_MAX;
 	thread0.td_frame = &proc0_tf;
+	ptrauth_thread0(&thread0);
 	pcpup->pc_curpcb = thread0.td_pcb;
 
 	/*
@@ -833,6 +834,13 @@ initarm(struct arm64_bootparams *abp)
 		    kern_getenv("kern.cfg.order"));
 
 	/*
+	 * Check if pointer authentication is available on this system, and
+	 * if so enable its use. This needs to be called before init_proc0
+	 * as that will configure the thread0 pointer authentication keys.
+	 */
+	ptrauth_init();
+
+	/*
 	 * Dump the boot metadata. We have to wait for cninit() since console
 	 * output is required. If it's grossly incorrect the kernel will never
 	 * make it this far.
@@ -847,6 +855,10 @@ initarm(struct arm64_bootparams *abp)
 
 	dbg_init();
 	kdb_init();
+#ifdef KDB
+	if ((boothowto & RB_KDB) != 0)
+		kdb_enter(KDB_WHY_BOOTFLAGS, "Boot flags requested debugger");
+#endif
 	pan_enable();
 
 	kcsan_cpu_init(0);

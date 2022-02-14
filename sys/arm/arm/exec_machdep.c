@@ -43,6 +43,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/exec.h>
 #include <sys/imgact.h>
 #include <sys/kdb.h>
 #include <sys/kernel.h>
@@ -62,6 +63,15 @@ __FBSDID("$FreeBSD$");
 #include <machine/sysarch.h>
 #include <machine/vfp.h>
 #include <machine/vmparam.h>
+
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
+
+_Static_assert(sizeof(mcontext_t) == 208, "mcontext_t size incorrect");
+_Static_assert(sizeof(ucontext_t) == 260, "ucontext_t size incorrect");
+_Static_assert(sizeof(siginfo_t) == 64, "siginfo_t size incorrect");
 
 /*
  * Clear registers on exec
@@ -340,7 +350,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	if (sysent->sv_sigcode_base != 0)
 		tf->tf_usr_lr = (register_t)sysent->sv_sigcode_base;
 	else
-		tf->tf_usr_lr = (register_t)(sysent->sv_psstrings -
+		tf->tf_usr_lr = (register_t)(PROC_PS_STRINGS(p) -
 		    *(sysent->sv_szsigcode));
 	/* Set the mode to enter in the signal handler */
 #if __ARM_ARCH >= 7

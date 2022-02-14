@@ -328,8 +328,9 @@ static struct mbuf *
 pie_extract_head(struct dn_queue *q, aqm_time_t *pkt_ts, int getts)
 {
 	struct m_tag *mtag;
-	struct mbuf *m = q->mq.head;
+	struct mbuf *m;
 
+next:	m = q->mq.head;
 	if (m == NULL)
 		return m;
 	q->mq.head = m->m_nextpkt;
@@ -350,6 +351,11 @@ pie_extract_head(struct dn_queue *q, aqm_time_t *pkt_ts, int getts)
 			*pkt_ts = *(aqm_time_t *)(mtag + 1);
 			m_tag_delete(m,mtag); 
 		}
+	}
+	if (m->m_pkthdr.rcvif != NULL &&
+	    __predict_false(m_rcvif_restore(m) == NULL)) {
+		m_freem(m);
+		goto next;
 	}
 	return m;
 }
@@ -591,8 +597,10 @@ aqm_pie_init(struct dn_queue *q)
 		}
 
 		pst = q->aqm_status;
+		dummynet_sched_lock();
 		/* increase reference count for PIE module */
 		pie_desc.ref_count++;
+		dummynet_sched_unlock();
 		
 		pst->pq = q;
 		pst->parms = pprms;
@@ -626,9 +634,9 @@ pie_callout_cleanup(void *x)
 	mtx_unlock(&pst->lock_mtx);
 	mtx_destroy(&pst->lock_mtx);
 	free(x, M_DUMMYNET);
-	DN_BH_WLOCK();
+	dummynet_sched_lock();
 	pie_desc.ref_count--;
-	DN_BH_WUNLOCK();
+	dummynet_sched_unlock();
 }
 
 /* 

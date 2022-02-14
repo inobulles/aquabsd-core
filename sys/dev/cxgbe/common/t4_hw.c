@@ -3924,6 +3924,9 @@ int t4_link_l1cfg(struct adapter *adap, unsigned int mbox, unsigned int port,
 				if (speed & FW_PORT_CAP32_SPEED_100G) {
 					fec |= FW_PORT_CAP32_FEC_RS;
 					fec |= FW_PORT_CAP32_FEC_NO_FEC;
+				} else if (speed & FW_PORT_CAP32_SPEED_50G) {
+					fec |= FW_PORT_CAP32_FEC_BASER_RS;
+					fec |= FW_PORT_CAP32_FEC_NO_FEC;
 				} else {
 					fec |= FW_PORT_CAP32_FEC_RS;
 					fec |= FW_PORT_CAP32_FEC_BASER_RS;
@@ -3937,6 +3940,20 @@ int t4_link_l1cfg(struct adapter *adap, unsigned int mbox, unsigned int port,
 				 * because we aren't setting FORCE_FEC here.
 				 */
 				fec |= fec_to_fwcap(lc->fec_hint);
+				MPASS(powerof2(fec));
+
+				/*
+				 * Override the hint if the FEC is not valid for
+				 * the potential top speed.  Request the best
+				 * FEC at that speed instead.
+				 */
+				if (speed & FW_PORT_CAP32_SPEED_100G) {
+					if (fec == FW_PORT_CAP32_FEC_BASER_RS)
+						fec = FW_PORT_CAP32_FEC_RS;
+				} else if (speed & FW_PORT_CAP32_SPEED_50G) {
+					if (fec == FW_PORT_CAP32_FEC_RS)
+						fec = FW_PORT_CAP32_FEC_BASER_RS;
+				}
 			}
 		} else {
 			/*
@@ -6632,7 +6649,6 @@ int t4_set_trace_filter(struct adapter *adap, const struct trace_params *tp,
 {
 	int i, ofst = idx * 4;
 	u32 data_reg, mask_reg, cfg;
-	u32 multitrc = F_TRCMULTIFILTER;
 	u32 en = is_t4(adap) ? F_TFEN : F_T5_TFEN;
 
 	if (idx < 0 || idx >= NTRACE)
@@ -6667,7 +6683,6 @@ int t4_set_trace_filter(struct adapter *adap, const struct trace_params *tp,
 		 * maximum packet capture size of 9600 bytes is recommended.
 		 * Also in this mode, only trace0 can be enabled and running.
 		 */
-		multitrc = 0;
 		if (tp->snap_len > 9600 || idx)
 			return -EINVAL;
 	}
@@ -9060,7 +9075,6 @@ int t4_handle_fw_rpl(struct adapter *adap, const __be64 *rpl)
 		int i;
 		int chan = G_FW_PORT_CMD_PORTID(be32_to_cpu(p->op_to_portid));
 		struct port_info *pi = NULL;
-		struct link_config *lc;
 
 		for_each_port(adap, i) {
 			pi = adap2pinfo(adap, i);
@@ -9068,7 +9082,6 @@ int t4_handle_fw_rpl(struct adapter *adap, const __be64 *rpl)
 				break;
 		}
 
-		lc = &pi->link_cfg;
 		PORT_LOCK(pi);
 		handle_port_info(pi, p, action, &mod_changed, &link_changed);
 		PORT_UNLOCK(pi);

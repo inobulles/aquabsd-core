@@ -1686,9 +1686,8 @@ tcpip_fillheaders(struct inpcb *inp, uint16_t port, void *ip_ptr, void *tcp_ptr)
 	th->th_dport = inp->inp_fport;
 	th->th_seq = 0;
 	th->th_ack = 0;
-	th->th_x2 = 0;
 	th->th_off = 5;
-	th->th_flags = 0;
+	tcp_set_flags(th, 0);
 	th->th_win = 0;
 	th->th_urp = 0;
 	th->th_sum = 0;		/* in_pseudo() is called later for ipv4 */
@@ -1746,7 +1745,7 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 	uint16_t port;
 	int output_ret;
 #ifdef INVARIANTS
-	int thflags = th->th_flags;
+	int thflags = tcp_get_flags(th);
 #endif
 
 	KASSERT(tp != NULL || m != NULL, ("tcp_respond: tp and m both NULL"));
@@ -2016,9 +2015,8 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 #endif
 	nth->th_seq = htonl(seq);
 	nth->th_ack = htonl(ack);
-	nth->th_x2 = 0;
 	nth->th_off = (sizeof (struct tcphdr) + optlen) >> 2;
-	nth->th_flags = flags;
+	tcp_set_flags(nth, flags);
 	if (tp != NULL)
 		nth->th_win = htons((u_short) (win >> tp->rcv_scale));
 	else
@@ -3836,6 +3834,18 @@ SYSCTL_PROC(_net_inet_tcp, TCPCTL_DROP, drop,
     CTLFLAG_NEEDGIANT, NULL, 0, sysctl_drop, "",
     "Drop TCP connection");
 
+static int
+tcp_sysctl_setsockopt(SYSCTL_HANDLER_ARGS)
+{
+	return (sysctl_setsockopt(oidp, arg1, arg2, req, &V_tcbinfo,
+	    &tcp_ctloutput_set));
+}
+
+SYSCTL_PROC(_net_inet_tcp, OID_AUTO, setsockopt,
+    CTLFLAG_VNET | CTLTYPE_STRUCT | CTLFLAG_WR | CTLFLAG_SKIP |
+    CTLFLAG_MPSAFE, NULL, 0, tcp_sysctl_setsockopt, "",
+    "Set socket option for TCP endpoint");
+
 #ifdef KERN_TLS
 static int
 sysctl_switch_tls(SYSCTL_HANDLER_ARGS)
@@ -4061,7 +4071,7 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 	}
 	sp = s + strlen(s);
 	if (th)
-		sprintf(sp, " tcpflags 0x%b", th->th_flags, PRINT_TH_FLAGS);
+		sprintf(sp, " tcpflags 0x%b", tcp_get_flags(th), PRINT_TH_FLAGS);
 	if (*(s + size - 1) != '\0')
 		panic("%s: string too long", __func__);
 	return (s);

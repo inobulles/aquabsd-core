@@ -483,6 +483,12 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 		panic("No debugger in kernel.");
 #endif
 		break;
+	case EXCP_FPAC:
+		/* We can see this if the authentication on PAC fails */
+		print_registers(frame);
+		printf(" far: %16lx\n", READ_SPECIALREG(far_el1));
+		panic("FPAC kernel exception");
+		break;
 	case EXCP_UNKNOWN:
 		if (undef_insn(1, frame))
 			break;
@@ -573,6 +579,11 @@ do_el0_sync(struct thread *td, struct trapframe *frame)
 			    exception);
 		userret(td, frame);
 		break;
+	case EXCP_FPAC:
+		call_trapsignal(td, SIGILL, ILL_ILLOPN, (void *)frame->tf_elr,
+		    exception);
+		userret(td, frame);
+		break;
 	case EXCP_SP_ALIGN:
 		call_trapsignal(td, SIGBUS, BUS_ADRALN, (void *)frame->tf_sp,
 		    exception);
@@ -609,10 +620,14 @@ do_el0_sync(struct thread *td, struct trapframe *frame)
 		userret(td, frame);
 		break;
 	case EXCP_SOFTSTP_EL0:
-		td->td_frame->tf_spsr &= ~PSR_SS;
-		td->td_pcb->pcb_flags &= ~PCB_SINGLE_STEP;
-		WRITE_SPECIALREG(mdscr_el1,
-		    READ_SPECIALREG(mdscr_el1) & ~DBG_MDSCR_SS);
+		PROC_LOCK(td->td_proc);
+		if ((td->td_dbgflags & TDB_STEP) != 0) {
+			td->td_frame->tf_spsr &= ~PSR_SS;
+			td->td_pcb->pcb_flags &= ~PCB_SINGLE_STEP;
+			WRITE_SPECIALREG(mdscr_el1,
+			    READ_SPECIALREG(mdscr_el1) & ~MDSCR_SS);
+		}
+		PROC_UNLOCK(td->td_proc);
 		call_trapsignal(td, SIGTRAP, TRAP_TRACE,
 		    (void *)frame->tf_elr, exception);
 		userret(td, frame);
