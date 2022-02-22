@@ -826,7 +826,7 @@ struct	tcpstat {
 	uint64_t tcps_ace_ect0;		/* ACE SYN packet with ECT0 */
 	uint64_t tcps_ace_ce;		/* ACE SYN packet with CE */
 
-	uint64_t _pad[2];		/* 2 TBD */
+	uint64_t _pad[6];		/* 6 TBD placeholder for STABLE */
 };
 
 #define	tcps_rcvmemdrop	tcps_rcvreassfull	/* compat */
@@ -1076,7 +1076,6 @@ VNET_DECLARE(struct hhook_head *, tcp_hhh[HHOOK_TCP_LAST + 1]);
 #endif
 
 int	 tcp_addoptions(struct tcpopt *, u_char *);
-int	 tcp_ccalgounload(struct cc_algo *unload_algo);
 struct tcpcb *
 	 tcp_close(struct tcpcb *);
 void	 tcp_discardcb(struct tcpcb *);

@@ -75,7 +75,6 @@ CWARNFLAGS.clang+=	-Wthread-safety
 CWARNFLAGS+=	-Wno-uninitialized
 .endif # WARNS >=2 && WARNS <= 4
 CWARNFLAGS+=	-Wno-pointer-sign
-CWARNFLAGS+=	-Wdate-time
 # Clang has more warnings enabled by default, and when using -Wall, so if WARNS
 # is set to low values, these have to be disabled explicitly.
 .if ${WARNS} <= 6
@@ -205,6 +204,10 @@ CWARNFLAGS+=	-Wno-error=aggressive-loop-optimizations	\
 CWARNFLAGS+=	-Wno-error=overflow
 .endif
 .endif
+
+# GCC produces false positives for functions that switch on an
+# enum (GCC bug 87950)
+CWARNFLAGS+=	-Wno-return-type
 
 # GCC's own arm_neon.h triggers various warnings
 .if ${MACHINE_CPUARCH} == "aarch64"
