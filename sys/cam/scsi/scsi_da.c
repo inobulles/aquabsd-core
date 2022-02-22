@@ -346,6 +346,7 @@ struct da_softc {
 	da_flags flags;
 	da_quirks quirks;
 	int	 minimum_cmd_size;
+	int	 mode_page;
 	int	 error_inject;
 	int	 trim_max_ranges;
 	int	 delete_available;	/* Delete methods possibly available */
@@ -2876,9 +2877,9 @@ daregister(struct cam_periph *periph, void *arg)
 	 * ordered tag to a device.
 	 */
 	callout_init_mtx(&softc->sendordered_c, cam_periph_mtx(periph), 0);
-	callout_reset(&softc->sendordered_c,
-	    (da_default_timeout * hz) / DA_ORDEREDTAG_INTERVAL,
-	    dasendorderedtag, periph);
+	callout_reset_sbt(&softc->sendordered_c,
+	    SBT_1S / DA_ORDEREDTAG_INTERVAL * da_default_timeout, 0,
+	    dasendorderedtag, periph, C_PREL(1));
 
 	cam_periph_unlock(periph);
 	/*
@@ -2907,6 +2908,9 @@ daregister(struct cam_periph *periph, void *arg)
 		softc->minimum_cmd_size = 10;
 	else
 		softc->minimum_cmd_size = 6;
+
+	/* On first PROBE_WP request all more pages, then adjust. */
+	softc->mode_page = SMS_ALL_PAGES_PAGE;
 
 	/* Predict whether device may support READ CAPACITY(16). */
 	if (SID_ANSI_REV(&cgd->inq_data) >= SCSI_REV_SPC3 &&
@@ -3003,9 +3007,10 @@ daregister(struct cam_periph *periph, void *arg)
 	callout_init_mtx(&softc->mediapoll_c, cam_periph_mtx(periph), 0);
 	if ((softc->flags & DA_FLAG_PACK_REMOVABLE) &&
 	    (cgd->inq_flags & SID_AEN) == 0 &&
-	    da_poll_period != 0)
-		callout_reset(&softc->mediapoll_c, da_poll_period * hz,
-		    damediapoll, periph);
+	    da_poll_period != 0) {
+		callout_reset_sbt(&softc->mediapoll_c, da_poll_period * SBT_1S,
+		    0, damediapoll, periph, C_PREL(1));
+	}
 
 	xpt_schedule(periph, CAM_PRIORITY_DEV);
 
@@ -3500,7 +3505,7 @@ out:
 		void  *mode_buf;
 		int    mode_buf_len;
 
-		if (da_disable_wp_detection) {
+		if (da_disable_wp_detection || softc->mode_page < 0) {
 			if ((softc->flags & DA_FLAG_CAN_RC16) != 0)
 				softc->state = DA_STATE_PROBE_RC16;
 			else
@@ -3524,7 +3529,7 @@ out:
 				    /*tag_action*/ MSG_SIMPLE_Q_TAG,
 				    /*dbd*/ FALSE,
 				    /*pc*/ SMS_PAGE_CTRL_CURRENT,
-				    /*page*/ SMS_ALL_PAGES_PAGE,
+				    /*page*/ softc->mode_page,
 				    /*param_buf*/ mode_buf,
 				    /*param_len*/ mode_buf_len,
 				    /*minimum_cmd_size*/ softc->minimum_cmd_size,
@@ -4684,12 +4689,9 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 static void
 dadone_probewp(struct cam_periph *periph, union ccb *done_ccb)
 {
-	struct scsi_mode_header_6 *mode_hdr6;
-	struct scsi_mode_header_10 *mode_hdr10;
 	struct da_softc *softc;
 	struct ccb_scsiio *csio;
 	u_int32_t  priority;
-	uint8_t dev_spec;
 
 	CAM_DEBUG(periph->path, CAM_DEBUG_TRACE, ("dadone_probewp\n"));
 
@@ -4707,18 +4709,31 @@ dadone_probewp(struct cam_periph *periph, union ccb *done_ccb)
 		(unsigned long)csio->ccb_h.ccb_state & DA_CCB_TYPE_MASK, periph,
 		done_ccb));
 
-	if (softc->minimum_cmd_size > 6) {
-		mode_hdr10 = (struct scsi_mode_header_10 *)csio->data_ptr;
-		dev_spec = mode_hdr10->dev_spec;
-	} else {
-		mode_hdr6 = (struct scsi_mode_header_6 *)csio->data_ptr;
-		dev_spec = mode_hdr6->dev_spec;
-	}
 	if (cam_ccb_status(done_ccb) == CAM_REQ_CMP) {
+		int len, off;
+		uint8_t dev_spec;
+
+		if (csio->cdb_len > 6) {
+			struct scsi_mode_header_10 *mh =
+			    (struct scsi_mode_header_10 *)csio->data_ptr;
+			len = 2 + scsi_2btoul(mh->data_length);
+			off = sizeof(*mh) + scsi_2btoul(mh->blk_desc_len);
+			dev_spec = mh->dev_spec;
+		} else {
+			struct scsi_mode_header_6 *mh =
+			    (struct scsi_mode_header_6 *)csio->data_ptr;
+			len = 1 + mh->data_length;
+			off = sizeof(*mh) + mh->blk_desc_len;
+			dev_spec = mh->dev_spec;
+		}
 		if ((dev_spec & 0x80) != 0)
 			softc->disk->d_flags |= DISKFLAG_WRITE_PROTECT;
 		else
 			softc->disk->d_flags &= ~DISKFLAG_WRITE_PROTECT;
+
+		/* Next time request only the first of returned mode pages. */
+		if (off < len && off < csio->dxfer_len - csio->resid)
+			softc->mode_page = csio->data_ptr[off] & SMPH_PC_MASK;
 	} else {
 		int error;
 
@@ -4735,6 +4750,9 @@ dadone_probewp(struct cam_periph *periph, union ccb *done_ccb)
 						 /*timeout*/0,
 						 /*getcount_only*/0);
 			}
+
+			/* We don't depend on it, so don't try again. */
+			softc->mode_page = -1;
 		}
 	}
 
@@ -6001,6 +6019,8 @@ daerror(union ccb *ccb, u_int32_t cam_flags, u_int32_t sense_flags)
 	case CAM_REQ_TERMIO:
 	case CAM_UNREC_HBA_ERROR:
 	case CAM_DATA_RUN_ERR:
+	case CAM_SCSI_STATUS_ERROR:
+	case CAM_ATA_STATUS_ERROR:
 		softc->errors++;
 		break;
 	default:
@@ -6035,9 +6055,12 @@ damediapoll(void *arg)
 			daschedule(periph);
 		}
 	}
+
 	/* Queue us up again */
-	if (da_poll_period != 0)
-		callout_schedule(&softc->mediapoll_c, da_poll_period * hz);
+	if (da_poll_period != 0) {
+		callout_schedule_sbt(&softc->mediapoll_c,
+		    da_poll_period * SBT_1S, 0, C_PREL(1));
+	}
 }
 
 static void
@@ -6224,9 +6247,9 @@ dasendorderedtag(void *arg)
 	}
 
 	/* Queue us up again */
-	callout_reset(&softc->sendordered_c,
-	    (da_default_timeout * hz) / DA_ORDEREDTAG_INTERVAL,
-	    dasendorderedtag, periph);
+	callout_schedule_sbt(&softc->sendordered_c,
+	    SBT_1S / DA_ORDEREDTAG_INTERVAL * da_default_timeout, 0,
+	    C_PREL(1));
 }
 
 /*

@@ -127,7 +127,9 @@
 #define HAVE_NEWLOCALE 1
 
 /* Define to 1 if you have the `pipe2' function. */
+#ifndef __APPLE__ /* Cross building tools on macOS */
 #define HAVE_PIPE2 1
+#endif
 
 /* Define to 1 if you have the `pread' function. */
 #define HAVE_PREAD 1
@@ -254,7 +256,9 @@
 #define HAVE_WORKING_VFORK 1
 
 /* Define to 1 if you have the <xlocale.h> header file. */
+#ifndef __linux__ /* Cross building tools build with glibc on linux */
 #define HAVE_XLOCALE_H 1
+#endif
 
 /* Define to 1 if you have the <zlib.h> header file. */
 #define HAVE_ZLIB_H 1

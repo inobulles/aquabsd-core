@@ -99,6 +99,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/syslog.h>
 #include <sys/systm.h>
+#include <sys/taskqueue.h>
 #include <sys/time.h>
 #include <sys/counter.h>
 #include <machine/atomic.h>
@@ -177,6 +178,10 @@ VNET_DEFINE_STATIC(u_char *, nexpire);		/* 0..mfchashsize-1 */
 #define	V_nexpire		VNET(nexpire)
 VNET_DEFINE_STATIC(LIST_HEAD(mfchashhdr, mfc)*, mfchashtbl);
 #define	V_mfchashtbl		VNET(mfchashtbl)
+VNET_DEFINE_STATIC(struct taskqueue *, task_queue);
+#define	V_task_queue		VNET(task_queue)
+VNET_DEFINE_STATIC(struct task, task);
+#define	V_task		VNET(task)
 
 VNET_DEFINE_STATIC(vifi_t, numvifs);
 #define	V_numvifs		VNET(numvifs)
@@ -187,12 +192,6 @@ static eventhandler_tag if_detach_event_tag = NULL;
 
 VNET_DEFINE_STATIC(struct callout, expire_upcalls_ch);
 #define	V_expire_upcalls_ch	VNET(expire_upcalls_ch)
-
-VNET_DEFINE_STATIC(struct mtx, upcall_thread_mtx);
-#define	V_upcall_thread_mtx	VNET(upcall_thread_mtx)
-
-VNET_DEFINE_STATIC(struct cv, upcall_thread_cv);
-#define	V_upcall_thread_cv	VNET(upcall_thread_cv)
 
 VNET_DEFINE_STATIC(struct mtx, buf_ring_mtx);
 #define	V_buf_ring_mtx	VNET(buf_ring_mtx)
@@ -231,8 +230,6 @@ static u_long	pim_squelch_wholepkt = 0;
 SYSCTL_ULONG(_net_inet_pim, OID_AUTO, squelch_wholepkt, CTLFLAG_RW,
     &pim_squelch_wholepkt, 0,
     "Disable IGMP_WHOLEPKT notifications if rendezvous point is unspecified");
-
-static volatile int upcall_thread_shutdown = 0;
 
 static const struct encaptab *pim_encap_cookie;
 static int pim_encapcheck(const struct mbuf *, int, int, void *);
@@ -319,7 +316,7 @@ static void	bw_upcalls_send(void);
 static int	del_bw_upcall(struct bw_upcall *);
 static int	del_mfc(struct mfcctl2 *);
 static int	del_vif(vifi_t);
-static int	del_vif_locked(vifi_t);
+static int	del_vif_locked(vifi_t, struct ifnet **);
 static void	expire_bw_upcalls_send(void *);
 static void	expire_mfc(struct mfc *);
 static void	expire_upcalls(void *);
@@ -624,7 +621,8 @@ static void
 if_detached_event(void *arg __unused, struct ifnet *ifp)
 {
     vifi_t vifi;
-    u_long i;
+    u_long i, vifi_cnt = 0;
+    struct ifnet *free_ptr;
 
     MRW_WLOCK();
 
@@ -653,29 +651,32 @@ if_detached_event(void *arg __unused, struct ifnet *ifp)
 			}
 		}
 	}
-	del_vif_locked(vifi);
+	del_vif_locked(vifi, &free_ptr);
+	if (free_ptr != NULL)
+		vifi_cnt++;
     }
 
     MRW_WUNLOCK();
+
+    /*
+     * Free IFP. We don't have to use free_ptr here as it is the same
+     * that ifp. Perform free as many times as required in case
+     * refcount is greater than 1.
+     */
+    for (i = 0; i < vifi_cnt; i++)
+	    if_free(ifp);
 }
 
 static void
-ip_mrouter_upcall_thread(void *arg)
+ip_mrouter_upcall_thread(void *arg, int pending __unused)
 {
 	CURVNET_SET((struct vnet *) arg);
 
-	while (upcall_thread_shutdown == 0) {
-		/* START: Event loop */
+	MRW_WLOCK();
+	bw_upcalls_send();
+	MRW_WUNLOCK();
 
-		/* END: Event loop */
-		mtx_lock(&V_upcall_thread_mtx);
-		cv_timedwait(&V_upcall_thread_cv, &V_upcall_thread_mtx, hz);
-		mtx_unlock(&V_upcall_thread_mtx);
-	}
-
-	upcall_thread_shutdown = 0;
 	CURVNET_RESTORE();
-	kthread_exit();
 }
 
 /*
@@ -718,12 +719,9 @@ ip_mrouter_init(struct socket *so, int version)
 	return (ENOMEM);
     }
 
-    /* Create upcall thread */
-    upcall_thread_shutdown = 0;
-    mtx_init(&V_upcall_thread_mtx, "ip_mroute upcall thread mtx", NULL, MTX_DEF);
-    cv_init(&V_upcall_thread_cv, "ip_mroute upcall cv");
-    kthread_add(ip_mrouter_upcall_thread, curvnet,
-        NULL, NULL, 0, 0, "ip_mroute upcall thread");
+    TASK_INIT(&V_task, 0, ip_mrouter_upcall_thread, curvnet);
+    taskqueue_cancel(V_task_queue, &V_task, NULL);
+    taskqueue_unblock(V_task_queue);
 
     callout_reset(&V_expire_upcalls_ch, EXPIRE_TIMEOUT, expire_upcalls,
 	curvnet);
@@ -755,7 +753,7 @@ X_ip_mrouter_done(void)
     struct bw_upcall *bu;
 
     if (V_ip_mrouter == NULL)
-	return EINVAL;
+	return (EINVAL);
 
     /*
      * Detach/disable hooks to the reset of the system.
@@ -764,19 +762,20 @@ X_ip_mrouter_done(void)
     atomic_subtract_int(&ip_mrouter_cnt, 1);
     V_mrt_api_config = 0;
 
-    MROUTER_WAIT();
+    /*
+     * Wait for all epoch sections to complete to ensure
+     * V_ip_mrouter = NULL is visible to others.
+     */
+    epoch_wait_preempt(net_epoch_preempt);
+
+    /* Stop and drain task queue */
+    taskqueue_block(V_task_queue);
+    while (taskqueue_cancel(V_task_queue, &V_task, NULL)) {
+    	taskqueue_drain(V_task_queue, &V_task);
+    }
 
     MRW_WLOCK();
-
-    upcall_thread_shutdown = 1;
-    mtx_lock(&V_upcall_thread_mtx);
-    cv_signal(&V_upcall_thread_cv);
-    mtx_unlock(&V_upcall_thread_mtx);
-
-    /* Wait for thread shutdown */
-    while (upcall_thread_shutdown == 1) {};
-
-    mtx_destroy(&V_upcall_thread_mtx);
+    taskqueue_cancel(V_task_queue, &V_task, NULL);
 
     /* Destroy upcall ring */
     while ((bu = buf_ring_dequeue_mc(V_bw_upcalls_ring)) != NULL) {
@@ -994,9 +993,11 @@ add_vif(struct vifctl *vifcp)
  * Delete a vif from the vif table
  */
 static int
-del_vif_locked(vifi_t vifi)
+del_vif_locked(vifi_t vifi, struct ifnet **ifp_free)
 {
     struct vif *vifp;
+
+    *ifp_free = NULL;
 
     MRW_WLOCK_ASSERT();
 
@@ -1016,7 +1017,7 @@ del_vif_locked(vifi_t vifi)
 	if (vifp->v_ifp) {
 	    if (vifp->v_ifp == V_multicast_register_if)
 	        V_multicast_register_if = NULL;
-	    if_free(vifp->v_ifp);
+	    *ifp_free = vifp->v_ifp;
 	}
     }
 
@@ -1039,10 +1040,14 @@ static int
 del_vif(vifi_t vifi)
 {
     int cc;
+    struct ifnet *free_ptr;
 
     MRW_WLOCK();
-    cc = del_vif_locked(vifi);
+    cc = del_vif_locked(vifi, &free_ptr);
     MRW_WUNLOCK();
+
+    if (free_ptr)
+	    if_free(free_ptr);
 
     return cc;
 }
@@ -1848,9 +1853,7 @@ expire_bw_meter_leq(void *arg)
 	}
 
 	/* Send all upcalls that are pending delivery */
-	mtx_lock(&V_upcall_thread_mtx);
-	cv_signal(&V_upcall_thread_cv);
-	mtx_unlock(&V_upcall_thread_mtx);
+	taskqueue_enqueue(V_task_queue, &V_task);
 
 	/* Reset counters */
 	x->bm_start_time = now;
@@ -2154,9 +2157,7 @@ bw_meter_prepare_upcall(struct bw_meter *x, struct timeval *nowp)
 	if (buf_ring_enqueue(V_bw_upcalls_ring, u))
 		log(LOG_WARNING, "bw_meter_prepare_upcall: cannot enqueue upcall\n");
 	if (buf_ring_count(V_bw_upcalls_ring) > (BW_UPCALLS_MAX / 2)) {
-		mtx_lock(&V_upcall_thread_mtx);
-		cv_signal(&V_upcall_thread_cv);
-		mtx_unlock(&V_upcall_thread_mtx);
+		taskqueue_enqueue(V_task_queue, &V_task);
 	}
 }
 /*
@@ -2753,6 +2754,11 @@ vnet_mroute_init(const void *unused __unused)
 
 	callout_init_rw(&V_expire_upcalls_ch, &mrouter_mtx, 0);
 	callout_init_rw(&V_bw_upcalls_ch, &mrouter_mtx, 0);
+
+	/* Prepare taskqueue */
+	V_task_queue = taskqueue_create_fast("ip_mroute_tskq", M_NOWAIT,
+		    taskqueue_thread_enqueue, &V_task_queue);
+	taskqueue_start_threads(&V_task_queue, 1, PI_NET, "ip_mroute_tskq task");
 }
 
 VNET_SYSINIT(vnet_mroute_init, SI_SUB_PROTO_MC, SI_ORDER_ANY, vnet_mroute_init,
@@ -2761,6 +2767,9 @@ VNET_SYSINIT(vnet_mroute_init, SI_SUB_PROTO_MC, SI_ORDER_ANY, vnet_mroute_init,
 static void
 vnet_mroute_uninit(const void *unused __unused)
 {
+
+	/* Taskqueue should be cancelled and drained before freeing */
+	taskqueue_free(V_task_queue);
 
 	free(V_viftable, M_MRTABLE);
 	free(V_nexpire, M_MRTABLE);

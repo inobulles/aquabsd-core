@@ -89,6 +89,7 @@ struct sysentvec aout_sysvec = {
 	.sv_maxuser	= AOUT32_USRSTACK,
 	.sv_usrstack	= AOUT32_USRSTACK,
 	.sv_psstrings	= AOUT32_PS_STRINGS,
+	.sv_psstringssz	= sizeof(struct ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_strings	= exec_copyout_strings,
 	.sv_setregs	= exec_setregs,
@@ -139,6 +140,7 @@ struct sysentvec aout_sysvec = {
 	.sv_maxuser	= AOUT32_USRSTACK,
 	.sv_usrstack	= AOUT32_USRSTACK,
 	.sv_psstrings	= AOUT32_PS_STRINGS,
+	.sv_psstringssz	= sizeof(struct freebsd32_ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_strings	= freebsd32_copyout_strings,
 	.sv_setregs	= ia32_setregs,
@@ -347,6 +349,10 @@ exec_aout_imgact(struct image_params *imgp)
 	vmspace->vm_taddr = (caddr_t) (uintptr_t) virtual_offset;
 	vmspace->vm_daddr = (caddr_t) (uintptr_t)
 			    (virtual_offset + a_out->a_text);
+
+	error = exec_map_stack(imgp);
+	if (error != 0)
+		return (error);
 
 	/* Fill in image_params */
 	imgp->interpreted = 0;

@@ -885,12 +885,15 @@ rip_detach(struct socket *so)
 	KASSERT(inp->inp_faddr.s_addr == INADDR_ANY,
 	    ("rip_detach: not closed"));
 
+	/* Disable mrouter first */
+	if (so == V_ip_mrouter && ip_mrouter_done)
+		ip_mrouter_done();
+
 	INP_WLOCK(inp);
 	INP_HASH_WLOCK(&V_ripcbinfo);
 	rip_delhash(inp);
 	INP_HASH_WUNLOCK(&V_ripcbinfo);
-	if (so == V_ip_mrouter && ip_mrouter_done)
-		ip_mrouter_done();
+
 	if (ip_rsvp_force_done)
 		ip_rsvp_force_done(so);
 	if (so == V_ip_rsvpd)

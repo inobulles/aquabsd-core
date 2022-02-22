@@ -201,11 +201,11 @@ SYSCTL_INT(ASLR_NODE_OID, OID_AUTO, honor_sbrk, CTLFLAG_RW,
     &__elfN(aslr_honor_sbrk), 0,
     __XSTRING(__CONCAT(ELF, __ELF_WORD_SIZE)) ": assume sbrk is used");
 
-static int __elfN(aslr_stack_gap) = 0;
-SYSCTL_INT(ASLR_NODE_OID, OID_AUTO, stack_gap, CTLFLAG_RW,
-    &__elfN(aslr_stack_gap), 0,
+static int __elfN(aslr_stack) = 1;
+SYSCTL_INT(ASLR_NODE_OID, OID_AUTO, stack, CTLFLAG_RWTUN,
+    &__elfN(aslr_stack), 0,
     __XSTRING(__CONCAT(ELF, __ELF_WORD_SIZE))
-    ": maximum percentage of main stack to waste on a random gap");
+    ": enable stack address randomization");
 
 static int __elfN(sigfastblock) = 1;
 SYSCTL_INT(__CONCAT(_kern_elf, __ELF_WORD_SIZE), OID_AUTO, sigfastblock,
@@ -1301,6 +1301,8 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 		if (!__elfN(aslr_honor_sbrk) ||
 		    (imgp->proc->p_flag2 & P2_ASLR_IGNSTART) != 0)
 			imgp->map_flags |= MAP_ASLR_IGNSTART;
+		if (__elfN(aslr_stack))
+			imgp->map_flags |= MAP_ASLR_STACK;
 	}
 
 	if ((!__elfN(allow_wx) && (fctl0 & NT_FREEBSD_FCTL_WXNEEDED) == 0 &&
@@ -1309,14 +1311,16 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 		imgp->map_flags |= MAP_WXORX;
 
 	error = exec_new_vmspace(imgp, sv);
-	vmspace = imgp->proc->p_vmspace;
-	map = &vmspace->vm_map;
 
 	imgp->proc->p_sysent = sv;
 	imgp->proc->p_elf_brandinfo = brand_info;
 
-	maxv = vm_map_max(map) - lim_max(td, RLIMIT_STACK);
-	if (mapsz >= maxv - vm_map_min(map)) {
+	vmspace = imgp->proc->p_vmspace;
+	map = &vmspace->vm_map;
+	maxv = sv->sv_usrstack;
+	if ((imgp->map_flags & MAP_ASLR_STACK) == 0)
+		maxv -= lim_max(td, RLIMIT_STACK);
+	if (error == 0 && mapsz >= maxv - vm_map_min(map)) {
 		uprintf("Excessive mapping size\n");
 		error = ENOEXEC;
 	}
@@ -1342,8 +1346,6 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 	if (error != 0)
 		goto ret;
 
-	entry = (u_long)hdr->e_entry + et_dyn_addr;
-
 	/*
 	 * We load the dynamic linker where a userland call
 	 * to mmap(0, ...) would put it.  The rationale behind this
@@ -1364,6 +1366,7 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 		map->anon_loc = addr;
 	}
 
+	entry = (u_long)hdr->e_entry + et_dyn_addr;
 	imgp->entry_addr = entry;
 
 	if (interp != NULL) {
@@ -1383,6 +1386,10 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 			goto ret;
 	} else
 		addr = et_dyn_addr;
+
+	error = exec_map_stack(imgp);
+	if (error != 0)
+		goto ret;
 
 	/*
 	 * Construct auxargs table (used by the copyout_auxargs routine)
@@ -2179,16 +2186,16 @@ __elfN(note_prpsinfo)(void *arg, struct sbuf *sb, size_t *sizep)
 	*sizep = sizeof(*psinfo);
 }
 
-static void
-__elfN(note_prstatus)(void *arg, struct sbuf *sb, size_t *sizep)
+static bool
+__elfN(get_prstatus)(struct regset *rs, struct thread *td, void *buf,
+    size_t *sizep)
 {
-	struct thread *td;
 	elf_prstatus_t *status;
 
-	td = arg;
-	if (sb != NULL) {
-		KASSERT(*sizep == sizeof(*status), ("invalid size"));
-		status = malloc(sizeof(*status), M_TEMP, M_ZERO | M_WAITOK);
+	if (buf != NULL) {
+		KASSERT(*sizep == sizeof(*status), ("%s: invalid size",
+		    __func__));
+		status = buf;
 		status->pr_version = PRSTATUS_VERSION;
 		status->pr_statussz = sizeof(elf_prstatus_t);
 		status->pr_gregsetsz = sizeof(elf_gregset_t);
@@ -2201,11 +2208,96 @@ __elfN(note_prstatus)(void *arg, struct sbuf *sb, size_t *sizep)
 #else
 		fill_regs(td, &status->pr_reg);
 #endif
+	}
+	*sizep = sizeof(*status);
+	return (true);
+}
+
+static bool
+__elfN(set_prstatus)(struct regset *rs, struct thread *td, void *buf,
+    size_t size)
+{
+	elf_prstatus_t *status;
+
+	KASSERT(size == sizeof(*status), ("%s: invalid size", __func__));
+	status = buf;
+#if defined(COMPAT_FREEBSD32) && __ELF_WORD_SIZE == 32
+	set_regs32(td, &status->pr_reg);
+#else
+	set_regs(td, &status->pr_reg);
+#endif
+	return (true);
+}
+
+static struct regset __elfN(regset_prstatus) = {
+	.note = NT_PRSTATUS,
+	.size = sizeof(elf_prstatus_t),
+	.get = __elfN(get_prstatus),
+	.set = __elfN(set_prstatus),
+};
+ELF_REGSET(__elfN(regset_prstatus));
+
+static void
+__elfN(note_prstatus)(void *arg, struct sbuf *sb, size_t *sizep)
+{
+	struct thread *td;
+	elf_prstatus_t *status;
+
+	td = arg;
+	if (sb != NULL) {
+		KASSERT(*sizep == sizeof(*status), ("%s: invalid size",
+		    __func__));
+		status = malloc(sizeof(*status), M_TEMP, M_ZERO | M_WAITOK);
+		__elfN(get_prstatus)(NULL, td, status, sizep);
 		sbuf_bcat(sb, status, sizeof(*status));
 		free(status, M_TEMP);
 	}
 	*sizep = sizeof(*status);
 }
+
+static bool
+__elfN(get_fpregset)(struct regset *rs, struct thread *td, void *buf,
+    size_t *sizep)
+{
+	elf_prfpregset_t *fpregset;
+
+	if (buf != NULL) {
+		KASSERT(*sizep == sizeof(*fpregset), ("%s: invalid size",
+		    __func__));
+		fpregset = buf;
+#if defined(COMPAT_FREEBSD32) && __ELF_WORD_SIZE == 32
+		fill_fpregs32(td, fpregset);
+#else
+		fill_fpregs(td, fpregset);
+#endif
+	}
+	*sizep = sizeof(fpregset);
+	return (true);
+}
+
+static bool
+__elfN(set_fpregset)(struct regset *rs, struct thread *td, void *buf,
+    size_t size)
+{
+	elf_prfpregset_t *fpregset;
+
+	fpregset = buf;
+	KASSERT(size == sizeof(*fpregset), ("%s: invalid size", __func__));
+#if defined(COMPAT_FREEBSD32) && __ELF_WORD_SIZE == 32
+	set_fpregs32(td, fpregset);
+#else
+	set_fpregs(td, fpregset);
+#endif
+	return (true);
+}
+
+static struct regset __elfN(regset_fpregset) = {
+	.note = NT_FPREGSET,
+	.size = sizeof(elf_prfpregset_t),
+	.get = __elfN(get_fpregset),
+	.set = __elfN(set_fpregset),
+};
+ELF_REGSET(__elfN(regset_fpregset));
 
 static void
 __elfN(note_fpregset)(void *arg, struct sbuf *sb, size_t *sizep)
@@ -2217,11 +2309,7 @@ __elfN(note_fpregset)(void *arg, struct sbuf *sb, size_t *sizep)
 	if (sb != NULL) {
 		KASSERT(*sizep == sizeof(*fpregset), ("invalid size"));
 		fpregset = malloc(sizeof(*fpregset), M_TEMP, M_ZERO | M_WAITOK);
-#if defined(COMPAT_FREEBSD32) && __ELF_WORD_SIZE == 32
-		fill_fpregs32(td, fpregset);
-#else
-		fill_fpregs(td, fpregset);
-#endif
+		__elfN(get_fpregset)(NULL, td, fpregset, sizep);
 		sbuf_bcat(sb, fpregset, sizeof(*fpregset));
 		free(fpregset, M_TEMP);
 	}
@@ -2516,9 +2604,9 @@ __elfN(note_procstat_psstrings)(void *arg, struct sbuf *sb, size_t *sizep)
 		KASSERT(*sizep == size, ("invalid size"));
 		structsize = sizeof(ps_strings);
 #if defined(COMPAT_FREEBSD32) && __ELF_WORD_SIZE == 32
-		ps_strings = PTROUT(p->p_sysent->sv_psstrings);
+		ps_strings = PTROUT(PROC_PS_STRINGS(p));
 #else
-		ps_strings = p->p_sysent->sv_psstrings;
+		ps_strings = PROC_PS_STRINGS(p);
 #endif
 		sbuf_bcat(sb, &structsize, sizeof(structsize));
 		sbuf_bcat(sb, &ps_strings, sizeof(ps_strings));
@@ -2756,23 +2844,4 @@ __elfN(untrans_prot)(vm_prot_t prot)
 	if (prot & VM_PROT_WRITE)
 		flags |= PF_W;
 	return (flags);
-}
-
-vm_size_t
-__elfN(stackgap)(struct image_params *imgp, uintptr_t *stack_base)
-{
-	uintptr_t range, rbase, gap;
-	int pct;
-
-	pct = __elfN(aslr_stack_gap);
-	if (pct == 0)
-		return (0);
-	if (pct > 50)
-		pct = 50;
-	range = imgp->eff_stack_sz * pct / 100;
-	arc4rand(&rbase, sizeof(rbase), 0);
-	gap = rbase % range;
-	gap &= ~(sizeof(u_long) - 1);
-	*stack_base -= gap;
-	return (gap);
 }

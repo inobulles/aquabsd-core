@@ -120,7 +120,6 @@ struct sysentvec {
 	void		(*sv_elf_core_prepare_notes)(struct thread *,
 			    struct note_info_list *, size_t *);
 	int		(*sv_imgact_try)(struct image_params *);
-	vm_size_t	(*sv_stackgap)(struct image_params *, uintptr_t *);
 	int		(*sv_copyout_auxargs)(struct image_params *,
 			    uintptr_t);
 	int		sv_minsigstksz;	/* minimum signal stack size */
@@ -128,6 +127,7 @@ struct sysentvec {
 	vm_offset_t	sv_maxuser;	/* VM_MAXUSER_ADDRESS */
 	vm_offset_t	sv_usrstack;	/* USRSTACK */
 	vm_offset_t	sv_psstrings;	/* PS_STRINGS */
+	size_t		sv_psstringssz;	/* PS_STRINGS size */
 	int		sv_stackprot;	/* vm protection for stack */
 	int		(*sv_copyout_strings)(struct image_params *,
 			    uintptr_t *);
@@ -160,6 +160,8 @@ struct sysentvec {
 			    struct image_params *imgp);
 	void		(*sv_set_fork_retval)(struct thread *);
 					/* Only used on x86 */
+	struct regset	**sv_regset_begin;
+	struct regset	**sv_regset_end;
 };
 
 #define	SV_ILP32	0x000100	/* 32-bit executable. */

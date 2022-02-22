@@ -68,24 +68,12 @@ LIB32DTRACE=	${DTRACE} -32
 LIB32WMAKEFLAGS+=	-DCOMPAT_32BIT
 
 # -------------------------------------------------------------------
-# soft-fp world
-.if ${COMPAT_ARCH:Marmv[67]*} != ""
-HAS_COMPAT=SOFT
-LIBSOFTCFLAGS=        -DCOMPAT_SOFTFP
-LIBSOFTCPUFLAGS= -mfloat-abi=softfp
-LIBSOFT_MACHINE=	arm
-LIBSOFT_MACHINE_ARCH=	${COMPAT_ARCH}
-LIBSOFTWMAKEENV= CPUTYPE=soft
-LIBSOFTWMAKEFLAGS=        -DCOMPAT_SOFTFP
-.endif
-
-# -------------------------------------------------------------------
 # In the program linking case, select LIBCOMPAT
 .if defined(NEED_COMPAT)
 .ifndef HAS_COMPAT
-.warning NEED_COMPAT defined, but no LIBCOMPAT is available (COMPAT_ARCH == ${COMPAT_ARCH}
+.warning NEED_COMPAT defined, but no LIBCOMPAT is available (COMPAT_ARCH == ${COMPAT_ARCH})
 .elif !${HAS_COMPAT:M${NEED_COMPAT}} && ${NEED_COMPAT} != "any"
-.error NEED_COMPAT (${NEED_COMPAT}) defined, but not in HAS_COMPAT ($HAS_COMPAT)
+.error NEED_COMPAT (${NEED_COMPAT}) defined, but not in HAS_COMPAT (${HAS_COMPAT})
 .elif ${NEED_COMPAT} == "any"
 .endif
 .ifdef WANT_COMPAT
@@ -101,7 +89,6 @@ _LIBCOMPAT:=	${HAS_COMPAT:[1]}
 _LIBCOMPAT:=	${WANT_COMPAT}
 .endif
 .endif
-
 
 # -------------------------------------------------------------------
 # Generic code for each type.
@@ -128,8 +115,7 @@ LIBCOMPATLDFLAGS+=	-L${LIBCOMPATTMP}/usr/lib${libcompat}
 LIBCOMPATWMAKEENV+=	MACHINE=${LIBCOMPAT_MACHINE}
 LIBCOMPATWMAKEENV+=	MACHINE_ARCH=${LIBCOMPAT_MACHINE_ARCH}
 
-# -B is needed to find /usr/lib32/crti.o for GCC and /usr/libsoft/crti.o for
-# Clang/GCC.
+# -B is needed to find /usr/lib32/crti.o for gcc.
 LIBCOMPATCFLAGS+=	-B${LIBCOMPATTMP}/usr/lib${libcompat}
 
 .if defined(WANT_COMPAT)
