@@ -193,17 +193,6 @@ struct filedesc_to_leader {
 	MPASS(curproc->p_fd == _fdp);						\
 	(curproc->p_numthreads == 1 && refcount_load(&_fdp->fd_refcnt) == 1);	\
 })
-#define	FILEDESC_FOREACH_FDE(fdp, _iterator, _fde)				\
-	struct filedesc *_fdp = (fdp);						\
-	int _lastfile = fdlastfile_single(_fdp);				\
-	for (_iterator = 0; _iterator <= _lastfile; _iterator++)		\
-		if ((_fde = &_fdp->fd_ofiles[_iterator])->fde_file != NULL)
-
-#define	FILEDESC_FOREACH_FP(fdp, _iterator, _fp)				\
-	struct filedesc *_fdp = (fdp);						\
-	int _lastfile = fdlastfile_single(_fdp);				\
-	for (_iterator = 0; _iterator <= _lastfile; _iterator++)		\
-		if ((_fp = _fdp->fd_ofiles[_iterator].fde_file) != NULL)
 
 #else
 
@@ -287,7 +276,7 @@ int	getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
 void	mountcheckdirs(struct vnode *olddp, struct vnode *newdp);
 
-int	fget_cap_locked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
+int	fget_cap_noref(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 	    struct file **fpp, struct filecaps *havecapsp);
 int	fget_cap(struct thread *td, int fd, cap_rights_t *needrightsp,
 	    struct file **fpp, struct filecaps *havecapsp);
@@ -304,7 +293,7 @@ int	fget_only_user(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 
 /* Requires a FILEDESC_{S,X}LOCK held and returns without a ref. */
 static __inline struct file *
-fget_locked(struct filedesc *fdp, int fd)
+fget_noref(struct filedesc *fdp, int fd)
 {
 
 	FILEDESC_LOCK_ASSERT(fdp);
@@ -316,7 +305,7 @@ fget_locked(struct filedesc *fdp, int fd)
 }
 
 static __inline struct filedescent *
-fdeget_locked(struct filedesc *fdp, int fd)
+fdeget_noref(struct filedesc *fdp, int fd)
 {
 	struct filedescent *fde;
 

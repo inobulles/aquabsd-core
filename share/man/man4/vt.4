@@ -24,7 +24,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd February 14, 2022
+.Dd March 17, 2022
 .Dt "VT" 4
 .Os
 .Sh NAME
@@ -204,6 +204,9 @@ graphics mode.
 Set to 1 to force the usage of the VGA driver regardless of whether
 ACPI IAPC_BOOT_ARCH signals no VGA support.
 Can be used to workaround firmware bugs in the ACPI tables.
+Note no VGA support is only acknowledged when running virtualized.
+There is too many broken firmware that wrongly reports no VGA support on
+physical hardware.
 .It Va kern.vty
 Set this value to
 .Ql vt
@@ -225,6 +228,10 @@ HTML-like hex triplet.
 See
 .Sx EXAMPLES
 below.
+.Pp
+Note: The
+.Nm
+VGA hardware driver does not support palette configuration.
 .It Va kern.vt.fb.default_mode
 Set this value to a graphic mode to override the default mode picked by the
 .Nm
@@ -314,7 +321,6 @@ Notification that the console bell has rung.
 .It Li hushed Ta true or false indicating whether or not the bell was quieted by the user when rung.
 .It Li hz Ta Tone that was requested in Hz.
 .El
-.Pp
 .Sh EXAMPLES
 This example changes the default color of normal text to green on a
 black background, or black on a green background when reversed.

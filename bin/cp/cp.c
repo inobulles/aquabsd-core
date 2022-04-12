@@ -87,7 +87,7 @@ static char emptystring[] = "";
 PATH_T to = { to.p_path, emptystring, "" };
 
 int fflag, iflag, lflag, nflag, pflag, sflag, vflag;
-static int Rflag, rflag;
+static int Hflag, Lflag, Rflag, rflag;
 volatile sig_atomic_t info;
 
 enum op { FILE_TO_FILE, FILE_TO_DIR, DIR_TO_DNE };
@@ -100,22 +100,23 @@ main(int argc, char *argv[])
 {
 	struct stat to_stat, tmp_stat;
 	enum op type;
-	int Hflag, Lflag, ch, fts_options, r, have_trailing_slash;
+	int Pflag, ch, fts_options, r, have_trailing_slash;
 	char *target;
 
 	fts_options = FTS_NOCHDIR | FTS_PHYSICAL;
-	Hflag = Lflag = 0;
+	Pflag = 0;
 	while ((ch = getopt(argc, argv, "HLPRafilnprsvx")) != -1)
 		switch (ch) {
 		case 'H':
 			Hflag = 1;
-			Lflag = 0;
+			Lflag = Pflag = 0;
 			break;
 		case 'L':
 			Lflag = 1;
-			Hflag = 0;
+			Hflag = Pflag = 0;
 			break;
 		case 'P':
+			Pflag = 1;
 			Hflag = Lflag = 0;
 			break;
 		case 'R':
@@ -124,6 +125,7 @@ main(int argc, char *argv[])
 		case 'a':
 			pflag = 1;
 			Rflag = 1;
+			Pflag = 1;
 			Hflag = Lflag = 0;
 			break;
 		case 'f':
@@ -146,7 +148,7 @@ main(int argc, char *argv[])
 			break;
 		case 'r':
 			rflag = Lflag = 1;
-			Hflag = 0;
+			Hflag = Pflag = 0;
 			break;
 		case 's':
 			sflag = 1;
@@ -180,7 +182,7 @@ main(int argc, char *argv[])
 			fts_options &= ~FTS_PHYSICAL;
 			fts_options |= FTS_LOGICAL;
 		}
-	} else {
+	} else if (!Pflag) {
 		fts_options &= ~FTS_PHYSICAL;
 		fts_options |= FTS_LOGICAL | FTS_COMFOLLOW;
 	}
@@ -271,9 +273,26 @@ main(int argc, char *argv[])
 	    &to_stat)));
 }
 
+/* Does the right thing based on -R + -H/-L/-P */
+static int
+copy_stat(const char *path, struct stat *sb)
+{
+
+	/*
+	 * For -R -H/-P, we need to lstat() instead; copy() cares about the link
+	 * itself rather than the target if we're not following links during the
+	 * traversal.
+	 */
+	if (!Rflag || Lflag)
+		return (stat(path, sb));
+	return (lstat(path, sb));
+}
+
+
 static int
 copy(char *argv[], enum op type, int fts_options, struct stat *root_stat)
 {
+	char rootname[NAME_MAX];
 	struct stat created_root_stat, to_stat;
 	FTS *ftsp;
 	FTSENT *curr;
@@ -310,45 +329,15 @@ copy(char *argv[], enum op type, int fts_options, struct stat *root_stat)
 			;
 		}
 
-		if (curr->fts_info == FTS_D && type != FILE_TO_FILE &&
-		    root_stat != NULL &&
-		    root_stat->st_dev == curr->fts_statp->st_dev &&
-		    root_stat->st_ino == curr->fts_statp->st_ino) {
-			assert(recurse_path == NULL);
-			if (curr->fts_level > FTS_ROOTLEVEL) {
-				/*
-				 * If the recursion isn't at the immediate
-				 * level, we can just not traverse into this
-				 * directory.
-				 */
-				fts_set(ftsp, curr, FTS_SKIP);
-				continue;
-			} else {
-				const char *slash;
-
-				/*
-				 * Grab the last path component and double it,
-				 * to make life easier later and ensure that
-				 * we work even with fts_level == 0 is a couple
-				 * of components deep in fts_path.  No path
-				 * separators are fine and expected in the
-				 * common case, though.
-				 */
-				slash = strrchr(curr->fts_path, '/');
-				if (slash != NULL)
-					slash++;
-				else
-					slash = curr->fts_path;
-				if (asprintf(&recurse_path, "%s/%s",
-				    curr->fts_path, slash) == -1)
-					err(1, "asprintf");
-			}
-		}
-
-		if (recurse_path != NULL &&
-		    strcmp(curr->fts_path, recurse_path) == 0) {
-			fts_set(ftsp, curr, FTS_SKIP);
-			continue;
+		/*
+		 * Stash the root basename off for detecting recursion later.
+		 *
+		 * This will be essential if the root is a symlink and we're
+		 * rolling with -L or -H.  The later bits will need this bit in
+		 * particular.
+		 */
+		if (curr->fts_level == FTS_ROOTLEVEL) {
+			strlcpy(rootname, curr->fts_name, sizeof(rootname));
 		}
 
 		/*
@@ -404,6 +393,41 @@ copy(char *argv[], enum op type, int fts_options, struct stat *root_stat)
 			to.p_end = target_mid + nlen;
 			*to.p_end = 0;
 			STRIP_TRAILING_SLASH(to);
+
+			/*
+			 * We're on the verge of recursing on ourselves.  Either
+			 * we need to stop right here (we knowingly just created
+			 * it), or we will in an immediate descendant.  Record
+			 * the path of the immediate descendant to make our
+			 * lives a little less complicated looking.
+			 */
+			if (curr->fts_info == FTS_D && root_stat != NULL &&
+			    root_stat->st_dev == curr->fts_statp->st_dev &&
+			    root_stat->st_ino == curr->fts_statp->st_ino) {
+				assert(recurse_path == NULL);
+
+				if (root_stat == &created_root_stat) {
+					/*
+					 * This directory didn't exist when we
+					 * started, we created it as part of
+					 * traversal.  Stop right here before we
+					 * do something silly.
+					 */
+					fts_set(ftsp, curr, FTS_SKIP);
+					continue;
+				}
+
+
+				if (asprintf(&recurse_path, "%s/%s", to.p_path,
+				    rootname) == -1)
+					err(1, "asprintf");
+			}
+
+			if (recurse_path != NULL &&
+			    strcmp(to.p_path, recurse_path) == 0) {
+				fts_set(ftsp, curr, FTS_SKIP);
+				continue;
+			}
 		}
 
 		if (curr->fts_info == FTS_DP) {
@@ -443,7 +467,7 @@ copy(char *argv[], enum op type, int fts_options, struct stat *root_stat)
 		}
 
 		/* Not an error but need to remember it happened. */
-		if (stat(to.p_path, &to_stat) == -1)
+		if (copy_stat(to.p_path, &to_stat) == -1)
 			dne = 1;
 		else {
 			if (to_stat.st_dev == curr->fts_statp->st_dev &&

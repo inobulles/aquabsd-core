@@ -28,6 +28,9 @@ NO_WTAUTOLOGICAL_POINTER_COMPARE= -Wno-tautological-pointer-compare
 .if ${COMPILER_VERSION} >= 100000
 NO_WMISLEADING_INDENTATION=	-Wno-misleading-indentation
 .endif
+.if ${COMPILER_VERSION} >= 130000
+NO_WUNUSED_BUT_SET_VARIABLE=	-Wno-unused-but-set-variable
+.endif
 .if ${COMPILER_VERSION} >= 140000
 NO_WBITWISE_INSTEAD_OF_LOGICAL=	-Wno-bitwise-instead-of-logical
 .endif
@@ -40,14 +43,18 @@ CWARNEXTRA?=	-Wno-error=tautological-compare -Wno-error=empty-body \
 CWARNEXTRA+=	-Wno-error=shift-negative-value
 CWARNEXTRA+=	-Wno-address-of-packed-member
 .if ${COMPILER_VERSION} >= 130000
-CWARNFLAGS+=	-Wno-error=unused-but-set-variable
+.if ${MK_SET_BUT_NOTUSED_KERNEL_WARNINGS} == "no"
+CWARNEXTRA+=	${NO_WUNUSED_BUT_SET_VARIABLE}
+.else
+CWARNEXTRA+=	-Wno-error=unused-but-set-variable
+.endif
 .endif
 .endif	# clang
 
 .if ${COMPILER_TYPE} == "gcc"
 # Catch-all for all the things that are in our tree, but for which we're
 # not yet ready for this compiler.
-NO_WUNUSED_BUT_SET_VARIABLE = -Wno-unused-but-set-variable
+NO_WUNUSED_BUT_SET_VARIABLE=-Wno-unused-but-set-variable
 CWARNEXTRA?=	-Wno-error=address				\
 		-Wno-error=aggressive-loop-optimizations	\
 		-Wno-error=array-bounds				\

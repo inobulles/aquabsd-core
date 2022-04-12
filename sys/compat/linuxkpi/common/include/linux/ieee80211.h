@@ -38,9 +38,6 @@
 #include <linux/bitops.h>
 #include <linux/if_ether.h>
 
-/* linux_80211.c */
-extern int debug_80211;
-
 
 /* 9.4.2.55 Management MIC element (CMAC-256, GMAC-128, and GMAC-256). */
 struct ieee80211_mmie_16 {
@@ -67,6 +64,7 @@ struct ieee80211_mmie_16 {
 
 #define	IEEE80211_MAX_AMPDU_BUF_HT		0x40
 #define	IEEE80211_MAX_AMPDU_BUF			256	/* for HE? */
+#define	IEEE80211_MAX_AMPDU_BUF_HE		256
 
 #define	IEEE80211_MAX_FRAME_LEN			2352
 #define	IEEE80211_MAX_DATA_LEN			(2300 + IEEE80211_CRC_LEN)
@@ -170,6 +168,7 @@ enum ieee80211_min_mpdu_start_spacing {
 #define	IEEE80211_PPE_THRES_NSS_MASK			2 /* TODO FIXME ax? */
 #define	IEEE80211_PPE_THRES_RU_INDEX_BITMASK_POS	3 /* TODO FIXME ax? */
 #define	IEEE80211_PPE_THRES_RU_INDEX_BITMASK_MASK	8 /* TODO FIXME ax? */
+#define	IEEE80211_HE_PPE_THRES_INFO_HEADER_SIZE		16	/* TODO FIXME ax? */
 
 #define	IEEE80211_HT_OP_MODE_PROTECTION			0x03	/* MASK */
 #define	IEEE80211_HT_OP_MODE_PROTECTION_NONE		0x00
@@ -309,6 +308,7 @@ enum ieee80211_sta_rx_bw {
 	IEEE80211_STA_RX_BW_40,
 	IEEE80211_STA_RX_BW_80,
 	IEEE80211_STA_RX_BW_160,
+	IEEE80211_STA_RX_BW_320,
 };
 
 enum ieee80211_tx_info_flags {
@@ -541,9 +541,8 @@ ieee80211_hdrlen(__le16 fc)
 
 	if (ieee80211_is_mgmt(fc)) {
 #ifdef __notyet__
-		if (debug_80211 > 0)
-			printf("XXX-BZ %s: TODO? fc %#04x size %u\n",
-			    __func__, fc, size);
+		printf("XXX-BZ %s: TODO? fc %#04x size %u\n",
+		    __func__, fc, size);
 #endif
 		;
 	}

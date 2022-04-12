@@ -292,9 +292,7 @@ ksiginfo_alloc(int wait)
 {
 	int flags;
 
-	flags = M_ZERO;
-	if (! wait)
-		flags |= M_NOWAIT;
+	flags = M_ZERO | (wait ? M_WAITOK : M_NOWAIT);
 	if (ksiginfo_zone != NULL)
 		return ((ksiginfo_t *)uma_zalloc(ksiginfo_zone, flags));
 	return (NULL);
@@ -3667,7 +3665,7 @@ corefile_open_last(struct thread *td, char *name, int indexpos,
 			break;
 
 		vp = nd.ni_vp;
-		NDFREE(&nd, NDF_ONLY_PNBUF);
+		NDFREE_PNBUF(&nd);
 		if ((flags & O_CREAT) == O_CREAT) {
 			nextvp = vp;
 			break;
@@ -3840,7 +3838,7 @@ corefile_open(const char *comm, uid_t uid, pid_t pid, struct thread *td,
 		    NULL);
 		if (error == 0) {
 			*vpp = nd.ni_vp;
-			NDFREE(&nd, NDF_ONLY_PNBUF);
+			NDFREE_PNBUF(&nd);
 		}
 	}
 

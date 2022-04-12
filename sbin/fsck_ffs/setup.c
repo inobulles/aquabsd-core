@@ -211,6 +211,41 @@ badsb:
 }
 
 /*
+ * Open a device or file to be checked by fsck.
+ */
+int
+openfilesys(char *dev)
+{
+	struct stat statb;
+	int saved_fsreadfd;
+
+	if (stat(dev, &statb) < 0)
+		return (0);
+	if ((statb.st_mode & S_IFMT) != S_IFCHR &&
+	    (statb.st_mode & S_IFMT) != S_IFBLK) {
+		if (bkgrdflag != 0 && (statb.st_flags & SF_SNAPSHOT) == 0) {
+			pfatal("BACKGROUND FSCK LACKS A SNAPSHOT\n");
+			exit(EEXIT);
+		}
+		if (bkgrdflag != 0) {
+			cursnapshot = statb.st_ino;
+		} else {
+			pfatal("%s IS NOT A DISK DEVICE\n", dev);
+			if (reply("CONTINUE") == 0)
+				return (0);
+		}
+	}
+	saved_fsreadfd = fsreadfd;
+	if ((fsreadfd = open(dev, O_RDONLY)) < 0) {
+		fsreadfd = saved_fsreadfd;
+		return (0);
+	}
+	if (saved_fsreadfd != -1)
+		close(saved_fsreadfd);
+	return (1);
+}
+
+/*
  * Read in the super block and its summary info.
  */
 int
@@ -331,6 +366,7 @@ void
 sblock_init(void)
 {
 
+	fsreadfd = -1;
 	fswritefd = -1;
 	fsmodified = 0;
 	lfdir = 0;

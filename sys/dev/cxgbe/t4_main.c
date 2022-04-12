@@ -5789,7 +5789,6 @@ init_link_config(struct port_info *pi)
 	struct link_config *lc = &pi->link_cfg;
 
 	PORT_LOCK_ASSERT_OWNED(pi);
-	MPASS(lc->pcaps != 0);
 
 	lc->requested_caps = 0;
 	lc->requested_speed = 0;
@@ -5815,13 +5814,12 @@ init_link_config(struct port_info *pi)
 		if (lc->requested_fec == 0)
 			lc->requested_fec = FEC_AUTO;
 	}
-	lc->force_fec = 0;
-	if (lc->pcaps & FW_PORT_CAP32_FORCE_FEC) {
-		if (t4_force_fec < 0)
-			lc->force_fec = -1;
-		else if (t4_force_fec > 0)
-			lc->force_fec = 1;
-	}
+	if (t4_force_fec < 0)
+		lc->force_fec = -1;
+	else if (t4_force_fec > 0)
+		lc->force_fec = 1;
+	else
+		lc->force_fec = 0;
 }
 
 /*
@@ -8984,13 +8982,20 @@ sysctl_cim_la(SYSCTL_HANDLER_ARGS)
 static void
 dump_cim_regs(struct adapter *sc)
 {
-	log(LOG_DEBUG, "%s: CIM debug regs %08x %08x %08x %08x %08x\n",
+	log(LOG_DEBUG, "%s: CIM debug regs1 %08x %08x %08x %08x %08x\n",
 	    device_get_nameunit(sc->dev),
 	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA0),
 	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA1),
 	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA2),
 	    t4_read_reg(sc, A_EDC_H_BIST_DATA_PATTERN),
 	    t4_read_reg(sc, A_EDC_H_BIST_STATUS_RDATA));
+	log(LOG_DEBUG, "%s: CIM debug regs2 %08x %08x %08x %08x %08x\n",
+	    device_get_nameunit(sc->dev),
+	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA0),
+	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA1),
+	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA0 + 0x800),
+	    t4_read_reg(sc, A_EDC_H_BIST_USER_WDATA1 + 0x800),
+	    t4_read_reg(sc, A_EDC_H_BIST_CMD_LEN));
 }
 
 static void
@@ -9004,7 +9009,7 @@ dump_cimla(struct adapter *sc)
 		    device_get_nameunit(sc->dev));
 		return;
 	}
-	rc = sbuf_cim_la(sc, &sb, M_NOWAIT);
+	rc = sbuf_cim_la(sc, &sb, M_WAITOK);
 	if (rc == 0) {
 		rc = sbuf_finish(&sb);
 		if (rc == 0) {
@@ -9440,9 +9445,12 @@ dump_devlog(struct adapter *sc)
 	int rc;
 	struct sbuf sb;
 
-	if (sbuf_new(&sb, NULL, 4096, SBUF_AUTOEXTEND) != &sb)
+	if (sbuf_new(&sb, NULL, 4096, SBUF_AUTOEXTEND) != &sb) {
+		log(LOG_DEBUG, "%s: failed to generate devlog dump.\n",
+		    device_get_nameunit(sc->dev));
 		return;
-	rc = sbuf_devlog(sc, &sb, M_NOWAIT);
+	}
+	rc = sbuf_devlog(sc, &sb, M_WAITOK);
 	if (rc == 0) {
 		rc = sbuf_finish(&sb);
 		if (rc == 0) {
@@ -9648,16 +9656,23 @@ sysctl_linkdnrc(SYSCTL_HANDLER_ARGS)
 }
 
 struct mem_desc {
-	unsigned int base;
-	unsigned int limit;
-	unsigned int idx;
+	u_int base;
+	u_int limit;
+	u_int idx;
 };
 
 static int
 mem_desc_cmp(const void *a, const void *b)
 {
-	return ((const struct mem_desc *)a)->base -
-	       ((const struct mem_desc *)b)->base;
+	const u_int v1 = ((const struct mem_desc *)a)->base;
+	const u_int v2 = ((const struct mem_desc *)b)->base;
+
+	if (v1 < v2)
+		return (-1);
+	else if (v1 > v2)
+		return (1);
+
+	return (0);
 }
 
 static void
@@ -9683,7 +9698,7 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 	struct adapter *sc = arg1;
 	struct sbuf *sb;
 	int rc, i, n;
-	uint32_t lo, hi, used, alloc;
+	uint32_t lo, hi, used, free, alloc;
 	static const char *memory[] = {
 		"EDC0:", "EDC1:", "MC:", "MC0:", "MC1:", "HMA:"
 	};
@@ -9693,8 +9708,8 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 		"Tx payload:", "Rx payload:", "LE hash:", "iSCSI region:",
 		"TDDP region:", "TPT region:", "STAG region:", "RQ region:",
 		"RQUDP region:", "PBL region:", "TXPBL region:",
-		"DBVFIFO region:", "ULPRX state:", "ULPTX state:",
-		"On-chip queues:", "TLS keys:",
+		"TLSKey region:", "DBVFIFO region:", "ULPRX state:",
+		"ULPTX state:", "On-chip queues:",
 	};
 	struct mem_desc avail[4];
 	struct mem_desc mem[nitems(region) + 3];	/* up to 3 holes */
@@ -9809,6 +9824,8 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 	ulp_region(RX_RQUDP);
 	ulp_region(RX_PBL);
 	ulp_region(TX_PBL);
+	if (sc->cryptocaps & FW_CAPS_CONFIG_TLSKEYS)
+		ulp_region(RX_TLS_KEY);
 #undef ulp_region
 
 	md->base = 0;
@@ -9847,13 +9864,6 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 		md->idx = nitems(region);  /* hide it */
 	md++;
 
-	md->base = sc->vres.key.start;
-	if (sc->vres.key.size)
-		md->limit = md->base + sc->vres.key.size - 1;
-	else
-		md->idx = nitems(region);  /* hide it */
-	md++;
-
 	/* add any address-space holes, there can be up to 3 */
 	for (n = 0; n < i - 1; n++)
 		if (avail[n].limit < avail[n + 1].base)
@@ -9862,6 +9872,7 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 		(md++)->base = avail[n].limit;
 
 	n = md - mem;
+	MPASS(n <= nitems(mem));
 	qsort(mem, n, sizeof(struct mem_desc), mem_desc_cmp);
 
 	for (lo = 0; lo < i; lo++)
@@ -9888,19 +9899,24 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 	mem_region_show(sb, "uP Extmem2:", lo, hi);
 
 	lo = t4_read_reg(sc, A_TP_PMM_RX_MAX_PAGE);
-	sbuf_printf(sb, "\n%u Rx pages of size %uKiB for %u channels\n",
-		   G_PMRXMAXPAGE(lo),
+	for (i = 0, free = 0; i < 2; i++)
+		free += G_FREERXPAGECOUNT(t4_read_reg(sc, A_TP_FLM_FREE_RX_CNT));
+	sbuf_printf(sb, "\n%u Rx pages (%u free) of size %uKiB for %u channels\n",
+		   G_PMRXMAXPAGE(lo), free,
 		   t4_read_reg(sc, A_TP_PMM_RX_PAGE_SIZE) >> 10,
 		   (lo & F_PMRXNUMCHN) ? 2 : 1);
 
 	lo = t4_read_reg(sc, A_TP_PMM_TX_MAX_PAGE);
 	hi = t4_read_reg(sc, A_TP_PMM_TX_PAGE_SIZE);
-	sbuf_printf(sb, "%u Tx pages of size %u%ciB for %u channels\n",
-		   G_PMTXMAXPAGE(lo),
+	for (i = 0, free = 0; i < 4; i++)
+		free += G_FREETXPAGECOUNT(t4_read_reg(sc, A_TP_FLM_FREE_TX_CNT));
+	sbuf_printf(sb, "%u Tx pages (%u free) of size %u%ciB for %u channels\n",
+		   G_PMTXMAXPAGE(lo), free,
 		   hi >= (1 << 20) ? (hi >> 20) : (hi >> 10),
 		   hi >= (1 << 20) ? 'M' : 'K', 1 << G_PMTXNUMCHN(lo));
-	sbuf_printf(sb, "%u p-structs\n",
-		   t4_read_reg(sc, A_TP_CMM_MM_MAX_PSTRUCT));
+	sbuf_printf(sb, "%u p-structs (%u free)\n",
+		   t4_read_reg(sc, A_TP_CMM_MM_MAX_PSTRUCT),
+		   G_FREEPSTRUCTCOUNT(t4_read_reg(sc, A_TP_FLM_FREE_PS_CNT)));
 
 	for (i = 0; i < 4; i++) {
 		if (chip_id(sc) > CHELSIO_T5)

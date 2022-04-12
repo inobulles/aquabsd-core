@@ -468,11 +468,11 @@ typedef struct video_color_palette video_color_palette_t;
 #define FBIO_SETWINORG	_IOW('F', 108, u_int)
 
 /* get/set display start address */
-#define FBIO_GETDISPSTART	_IOR('F', 109, video_display_start_t) 
+#define FBIO_GETDISPSTART	_IOR('F', 109, video_display_start_t)
 #define FBIO_SETDISPSTART	_IOW('F', 110, video_display_start_t)
 
 /* get/set scan line width */
-#define FBIO_GETLINEWIDTH	_IOR('F', 111, u_int) 
+#define FBIO_GETLINEWIDTH	_IOR('F', 111, u_int)
 #define FBIO_SETLINEWIDTH	_IOW('F', 112, u_int)
 
 /* color palette control */

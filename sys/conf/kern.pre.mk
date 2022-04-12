@@ -242,7 +242,7 @@ CDDL_C=		${CC} -c ${CDDL_CFLAGS} ${WERROR} ${.IMPSRC}
 # Special flags for managing the compat compiles for ZFS
 ZFS_CFLAGS+=	${CDDL_CFLAGS} -DBUILDING_ZFS -DHAVE_UIO_ZEROCOPY \
 	-DWITH_NETDUMP -D__KERNEL__ -D_SYS_CONDVAR_H_ -DSMP \
-	-DIN_FREEBSD_BASE -DHAVE_KSID
+	-DIN_FREEBSD_BASE
 
 .if ${MACHINE_ARCH} == "amd64"
 ZFS_CFLAGS+= -DHAVE_AVX2 -DHAVE_AVX -D__x86_64 -DHAVE_SSE2 -DHAVE_AVX512F \
@@ -262,7 +262,9 @@ ZFS_C=		${CC} -c ${ZFS_CFLAGS} ${WERROR} ${.IMPSRC}
 ZFS_RPC_C=	${CC} -c ${ZFS_CFLAGS} -DHAVE_RPC_TYPES ${WERROR} ${.IMPSRC}
 ZFS_S=		${CC} -c ${ZFS_ASM_CFLAGS} ${WERROR} ${.IMPSRC}
 
-
+# ATH driver
+ATH_CFLAGS=	-I${SRCTOP}/sys/dev/ath ${NO_WUNUSED_BUT_SET_VARIABLE}
+ATH_C=		${CC} -c ${CFLAGS} ${WERROR} ${ATH_CFLAGS} ${.IMPSRC}
 
 # Special flags for managing the compat compiles for DTrace
 DTRACE_CFLAGS=	-DBUILDING_DTRACE ${CDDL_CFLAGS} -I$S/cddl/dev/dtrace -I$S/cddl/dev/dtrace/${MACHINE_CPUARCH}

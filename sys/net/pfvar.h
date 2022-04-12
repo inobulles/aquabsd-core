@@ -39,6 +39,7 @@
 #include <sys/queue.h>
 #include <sys/counter.h>
 #include <sys/cpuset.h>
+#include <sys/epoch.h>
 #include <sys/malloc.h>
 #include <sys/nv.h>
 #include <sys/refcount.h>
@@ -52,6 +53,7 @@
 #include <vm/uma.h>
 
 #include <net/if.h>
+#include <net/ethernet.h>
 #include <net/radix.h>
 #include <netinet/in.h>
 #ifdef _KERNEL
@@ -353,6 +355,12 @@ struct pfi_dynaddr {
 extern struct mtx_padalign pf_unlnkdrules_mtx;
 #define	PF_UNLNKDRULES_LOCK()	mtx_lock(&pf_unlnkdrules_mtx)
 #define	PF_UNLNKDRULES_UNLOCK()	mtx_unlock(&pf_unlnkdrules_mtx)
+#define	PF_UNLNKDRULES_ASSERT()	mtx_assert(&pf_unlnkdrules_mtx, MA_OWNED)
+
+extern struct sx pf_config_lock;
+#define	PF_CONFIG_LOCK()	sx_xlock(&pf_config_lock)
+#define	PF_CONFIG_UNLOCK()	sx_xunlock(&pf_config_lock)
+#define	PF_CONFIG_ASSERT()	sx_assert(&pf_config_lock, SA_XLOCKED)
 
 extern struct rmlock pf_rules_lock;
 #define	PF_RULES_RLOCK_TRACKER	struct rm_priotracker _pf_rules_tracker
@@ -570,10 +578,103 @@ struct pf_rule_actions {
 	uint32_t	 flags;
 };
 
+union pf_keth_rule_ptr {
+	struct pf_keth_rule	*ptr;
+	uint32_t		nr;
+};
+
+struct pf_keth_rule_addr {
+	uint8_t	addr[ETHER_ADDR_LEN];
+	uint8_t	mask[ETHER_ADDR_LEN];
+	bool neg;
+	uint8_t	isset;
+};
+
+struct pf_keth_anchor;
+
+TAILQ_HEAD(pf_keth_ruleq, pf_keth_rule);
+
+struct pf_keth_ruleset {
+	struct pf_keth_ruleq		 rules[2];
+	struct pf_keth_rules {
+		struct pf_keth_ruleq	*rules;
+		int			 open;
+		uint32_t		 ticket;
+	} active, inactive;
+	struct epoch_context	 epoch_ctx;
+	struct vnet		*vnet;
+	struct pf_keth_anchor	*anchor;
+};
+
+RB_HEAD(pf_keth_anchor_global, pf_keth_anchor);
+RB_HEAD(pf_keth_anchor_node, pf_keth_anchor);
+struct pf_keth_anchor {
+	RB_ENTRY(pf_keth_anchor)	 entry_node;
+	RB_ENTRY(pf_keth_anchor)	 entry_global;
+	struct pf_keth_anchor		*parent;
+	struct pf_keth_anchor_node	 children;
+	char				 name[PF_ANCHOR_NAME_SIZE];
+	char				 path[MAXPATHLEN];
+	struct pf_keth_ruleset		 ruleset;
+	int				 refcnt;	/* anchor rules */
+	uint8_t				 anchor_relative;
+	uint8_t				 anchor_wildcard;
+};
+RB_PROTOTYPE(pf_keth_anchor_node, pf_keth_anchor, entry_node,
+    pf_keth_anchor_compare);
+RB_PROTOTYPE(pf_keth_anchor_global, pf_keth_anchor, entry_global,
+    pf_keth_anchor_compare);
+
+struct pf_keth_rule {
+#define PFE_SKIP_IFP		0
+#define PFE_SKIP_DIR		1
+#define PFE_SKIP_PROTO		2
+#define PFE_SKIP_SRC_ADDR	3
+#define PFE_SKIP_DST_ADDR	4
+#define PFE_SKIP_COUNT		5
+	union pf_keth_rule_ptr	 skip[PFE_SKIP_COUNT];
+
+	TAILQ_ENTRY(pf_keth_rule)	entries;
+
+	struct pf_keth_anchor	*anchor;
+	u_int8_t		 anchor_relative;
+	u_int8_t		 anchor_wildcard;
+
+	uint32_t		 nr;
+
+	bool			 quick;
+
+	/* Filter */
+	char			 ifname[IFNAMSIZ];
+	struct pfi_kkif		*kif;
+	bool			 ifnot;
+	uint8_t			 direction;
+	uint16_t		 proto;
+	struct pf_keth_rule_addr src, dst;
+	struct pf_rule_addr	 ipsrc, ipdst;
+
+	/* Stats */
+	counter_u64_t		 evaluations;
+	counter_u64_t		 packets[2];
+	counter_u64_t		 bytes[2];
+
+	/* Action */
+	char			 qname[PF_QNAME_SIZE];
+	int			 qid;
+	char			 tagname[PF_TAG_NAME_SIZE];
+	uint16_t		 tag;
+	uint8_t			 action;
+	uint16_t		 dnpipe;
+	uint32_t		 dnflags;
+};
+
 union pf_krule_ptr {
 	struct pf_krule		*ptr;
 	u_int32_t		 nr;
 };
+
+RB_HEAD(pf_krule_global, pf_krule);
+RB_PROTOTYPE(pf_krule_global, pf_krule, entry_global, pf_krule_compare);
 
 struct pf_krule {
 	struct pf_rule_addr	 src;
@@ -671,6 +772,8 @@ struct pf_krule {
 		struct pf_addr		addr;
 		u_int16_t		port;
 	}			divert;
+	u_int8_t		 md5sum[PF_MD5_DIGEST_LENGTH];
+	RB_ENTRY(pf_krule)	 entry_global;
 
 #ifdef PF_WANT_32_TO_64_COUNTER
 	LIST_ENTRY(pf_krule)	 allrulelist;
@@ -1041,6 +1144,7 @@ struct pf_kruleset {
 			u_int32_t		 rcount;
 			u_int32_t		 ticket;
 			int			 open;
+			struct pf_krule_global 	 *tree;
 		}			 active, inactive;
 	}			 rules[PF_RULESET_MAX];
 	struct pf_kanchor	*anchor;
@@ -1090,6 +1194,7 @@ RB_PROTOTYPE(pf_kanchor_node, pf_kanchor, entry_node, pf_kanchor_compare);
 				 PFR_TFLAG_COUNTERS)
 
 struct pf_kanchor_stackframe;
+struct pf_keth_anchor_stackframe;
 
 struct pfr_table {
 	char			 pfrt_anchor[MAXPATHLEN];
@@ -1432,7 +1537,7 @@ struct pf_divert {
 
 /*
  * The number of entries in the fragment queue must be limited
- * to avoid DoS by linear seaching.  Instead of a global limit,
+ * to avoid DoS by linear searching.  Instead of a global limit,
  * use a limit per entry point.  For large packets these sum up.
  */
 #define PF_FRAG_ENTRY_LIMIT		64
@@ -1617,6 +1722,7 @@ struct pfioc_ruleset {
 
 #define PF_RULESET_ALTQ		(PF_RULESET_MAX)
 #define PF_RULESET_TABLE	(PF_RULESET_MAX+1)
+#define PF_RULESET_ETH		(PF_RULESET_MAX+2)
 struct pfioc_trans {
 	int		 size;	/* number of elements */
 	int		 esize; /* size of each element in bytes */
@@ -1756,6 +1862,11 @@ struct pfioc_iface {
 #define	DIOCSETSYNCOOKIES	_IOWR('D', 95, struct pfioc_nv)
 #define	DIOCKEEPCOUNTERS	_IOWR('D', 96, struct pfioc_nv)
 #define	DIOCKEEPCOUNTERS_FREEBSD13	_IOWR('D', 92, struct pfioc_nv)
+#define	DIOCADDETHRULE		_IOWR('D', 97, struct pfioc_nv)
+#define	DIOCGETETHRULE		_IOWR('D', 98, struct pfioc_nv)
+#define	DIOCGETETHRULES		_IOWR('D', 99, struct pfioc_nv)
+#define	DIOCGETETHRULESETS	_IOWR('D', 100, struct pfioc_nv)
+#define	DIOCGETETHRULESET	_IOWR('D', 101, struct pfioc_nv)
 
 struct pf_ifspeed_v0 {
 	char			ifname[IFNAMSIZ];
@@ -1980,6 +2091,7 @@ extern void			 pf_addrcpy(struct pf_addr *, struct pf_addr *,
 				    u_int8_t);
 void				pf_free_rule(struct pf_krule *);
 
+int	pf_test_eth(int, int, struct ifnet *, struct mbuf **, struct inpcb *);
 #ifdef INET
 int	pf_test(int, int, struct ifnet *, struct mbuf **, struct inpcb *);
 int	pf_normalize_ip(struct mbuf **, int, struct pfi_kkif *, u_short *,
@@ -2140,9 +2252,17 @@ VNET_DECLARE(struct pf_kanchor_global,		 pf_anchors);
 #define	V_pf_anchors				 VNET(pf_anchors)
 VNET_DECLARE(struct pf_kanchor,			 pf_main_anchor);
 #define	V_pf_main_anchor			 VNET(pf_main_anchor)
+VNET_DECLARE(struct pf_keth_anchor_global,	 pf_keth_anchors);
+#define	V_pf_keth_anchors			 VNET(pf_keth_anchors)
 #define pf_main_ruleset	V_pf_main_anchor.ruleset
 
+VNET_DECLARE(struct pf_keth_anchor,		 pf_main_keth_anchor);
+#define V_pf_main_keth_anchor			 VNET(pf_main_keth_anchor)
+VNET_DECLARE(struct pf_keth_ruleset*,		 pf_keth);
+#define	V_pf_keth				 VNET(pf_keth)
+
 void			 pf_init_kruleset(struct pf_kruleset *);
+void			 pf_init_keth(struct pf_keth_ruleset *);
 int			 pf_kanchor_setup(struct pf_krule *,
 			    const struct pf_kruleset *, const char *);
 int			 pf_kanchor_nvcopyout(const struct pf_kruleset *,
@@ -2155,7 +2275,21 @@ struct pf_kruleset	*pf_find_kruleset(const char *);
 struct pf_kruleset	*pf_find_or_create_kruleset(const char *);
 void			 pf_rs_initialize(void);
 
+
 struct pf_krule		*pf_krule_alloc(void);
+
+void			 pf_remove_if_empty_keth_ruleset(
+			    struct pf_keth_ruleset *);
+struct pf_keth_ruleset	*pf_find_keth_ruleset(const char *);
+struct pf_keth_anchor	*pf_find_keth_anchor(const char *);
+int			 pf_keth_anchor_setup(struct pf_keth_rule *,
+			    const struct pf_keth_ruleset *, const char *);
+int			 pf_keth_anchor_nvcopyout(
+			    const struct pf_keth_ruleset *,
+			    const struct pf_keth_rule *, nvlist_t *);
+struct pf_keth_ruleset	*pf_find_or_create_keth_ruleset(const char *);
+void			 pf_keth_anchor_remove(struct pf_keth_rule *);
+
 void			 pf_krule_free(struct pf_krule *);
 #endif
 
@@ -2179,6 +2313,14 @@ void			 pf_step_into_anchor(struct pf_kanchor_stackframe *, int *,
 int			 pf_step_out_of_anchor(struct pf_kanchor_stackframe *, int *,
 			    struct pf_kruleset **, int, struct pf_krule **,
 			    struct pf_krule **, int *);
+void			 pf_step_into_keth_anchor(struct pf_keth_anchor_stackframe *,
+			    int *, struct pf_keth_ruleset **,
+			    struct pf_keth_rule **, struct pf_keth_rule **,
+			    int *);
+int			 pf_step_out_of_keth_anchor(struct pf_keth_anchor_stackframe *,
+			    int *, struct pf_keth_ruleset **,
+			    struct pf_keth_rule **, struct pf_keth_rule **,
+			    int *);
 
 int			 pf_map_addr(u_int8_t, struct pf_krule *,
 			    struct pf_addr *, struct pf_addr *,

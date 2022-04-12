@@ -336,11 +336,10 @@ proc_rwmem(struct proc *p, struct uio *uio)
 	int error, fault_flags, page_offset, writing;
 
 	/*
-	 * Assert that someone has locked this vmspace.  (Should be
-	 * curthread but we can't assert that.)  This keeps the process
-	 * from exiting out from under us until this operation completes.
+	 * Make sure that the process' vmspace remains live.
 	 */
-	PROC_ASSERT_HELD(p);
+	if (p != curproc)
+		PROC_ASSERT_HELD(p);
 	PROC_LOCK_ASSERT(p, MA_NOTOWNED);
 
 	/*
@@ -597,7 +596,7 @@ sys_ptrace(struct thread *td, struct ptrace_args *uap)
 		struct fpreg fpreg;
 		struct reg reg;
 		struct iovec vec;
-		char args[sizeof(td->td_sa.args)];
+		syscallarg_t args[nitems(td->td_sa.args)];
 		struct ptrace_sc_ret psr;
 		int ptevents;
 	} r;
@@ -1144,7 +1143,7 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		/* See the explanation in linux_ptrace_get_syscall_info(). */
 		bcopy(td2->td_sa.args, addr, SV_PROC_ABI(td->td_proc) ==
 		    SV_ABI_LINUX ? sizeof(td2->td_sa.args) :
-		    td2->td_sa.callp->sy_narg * sizeof(register_t));
+		    td2->td_sa.callp->sy_narg * sizeof(syscallarg_t));
 		break;
 
 	case PT_GET_SC_RET:

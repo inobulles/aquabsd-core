@@ -38,6 +38,7 @@
 #ifndef	_LINUXKPI_LINUX_SKBUFF_H
 #define	_LINUXKPI_LINUX_SKBUFF_H
 
+#include <linux/kernel.h>
 #include <linux/page.h>
 #include <linux/dma-mapping.h>
 #include <linux/netdev_features.h>
@@ -84,7 +85,7 @@ enum sk_buff_pkt_type {
 	PACKET_OTHERHOST,
 };
 
-#define	NET_SKB_PAD		CACHE_LINE_SIZE		/* ? */
+#define	NET_SKB_PAD		max(CACHE_LINE_SIZE, 32)
 
 struct sk_buff_head {
 		/* XXX TODO */
@@ -168,6 +169,7 @@ struct sk_buff {
 /* -------------------------------------------------------------------------- */
 
 struct sk_buff *linuxkpi_alloc_skb(size_t, gfp_t);
+struct sk_buff *linuxkpi_dev_alloc_skb(size_t, gfp_t);
 void linuxkpi_kfree_skb(struct sk_buff *);
 
 /* -------------------------------------------------------------------------- */
@@ -187,7 +189,7 @@ __dev_alloc_skb(size_t len, gfp_t gfp)
 {
 	struct sk_buff *skb;
 
-	skb = alloc_skb(len, gfp);
+	skb = linuxkpi_dev_alloc_skb(len, gfp);
 	SKB_IMPROVE();
 	SKB_TRACE(skb);
 	return (skb);
@@ -198,7 +200,7 @@ dev_alloc_skb(size_t len)
 {
 	struct sk_buff *skb;
 
-	skb = alloc_skb(len, GFP_NOWAIT);
+	skb = __dev_alloc_skb(len, GFP_NOWAIT);
 	SKB_IMPROVE();
 	SKB_TRACE(skb);
 	return (skb);
@@ -762,26 +764,27 @@ skb_mark_not_on_list(struct sk_buff *skb)
 }
 
 static inline void
-skb_queue_splice_init(struct sk_buff_head *q, struct sk_buff_head *h)
+skb_queue_splice_init(struct sk_buff_head *from, struct sk_buff_head *to)
 {
-	struct sk_buff *b, *e;
+	struct sk_buff *b, *e, *n;
 
-	SKB_TRACE2(q, h);
+	SKB_TRACE2(from, to);
 
-	if (skb_queue_empty(q))
+	if (skb_queue_empty(from))
 		return;
 
 	/* XXX do we need a barrier around this? */
-	b = q->next;
-	e = q->prev;
+	b = from->next;
+	e = from->prev;
+	n = to->next;
 
-	b->prev = (struct sk_buff *)h;
-	h->next = b;
-	e->next = h->next;
-	h->next->prev = e;
+	b->prev = (struct sk_buff *)to;
+	to->next = b;
+	e->next = n;
+	n->prev = e;
 
-	h->qlen += q->qlen;
-	__skb_queue_head_init(q);
+	to->qlen += from->qlen;
+	__skb_queue_head_init(from);
 }
 
 static inline void
@@ -884,6 +887,12 @@ csum_unfold(__sum16 sum)
 {
 	SKB_TODO();
 	return (sum);
+}
+
+static __inline void
+skb_postpush_rcsum(struct sk_buff *skb, const void *data, size_t len)
+{
+	SKB_TODO();
 }
 
 static inline void
