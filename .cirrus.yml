@@ -18,24 +18,18 @@ task:
   - uname -a
   - df -h
   - pkg --version
-  - mkdir -p /usr/obj/$(pwd -P)
+  - sh ci/setup.sh $(pwd -P)
   kernel_build_script:
-  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes buildkernel
+  - sh ci/kernel.sh $(pwd -P)
   base_build_script:
-  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes buildworld
+  - sh ci/base.sh $(pwd -P)
   distribute_script:
-  - mkdir -p /usr/obj/$(pwd -P)/amd64.amd64/release/dist/
-  - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ -DNO_ROOT distributekernel
-  - make DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_TOOLCHAIN=yes WITHOUT_LIB32=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_UPDATE=yes WITHOUT_PORTSNAP=yes WITHOUT_SENDMAIL=yes WITHOUT_TCP_WRAPPERS=yes WITHOUT_PAM_SUPPORT=yes WITHOUT_VT=yes WITHOUT_SVNLITE=yes WITHOUT_RESCUE=yes -DNO_ROOT distributeworld
+  - sh ci/distribute.sh $(pwd -P)
   package_script:
-  - make packagekernel DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/
-  - make packageworld DISTDIR=/usr/obj/$(pwd -P)/amd64.amd64/release/dist/ WITHOUT_LIB32=yes
-  - mkdir .build/
-  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/dist/kernel.txz .build/
-  - mv /usr/obj/$(pwd -P)/amd64.amd64/release/dist/base.txz .build/
+  - sh ci/package.sh $(pwd -P)
   post_script:
-  - ls -l .build/
+  - ls -l artifacts
   - df -h
   - du -h -s /usr/obj
   distribution_artifacts:
-    path: ".build/*"
+    path: "artifacts/*"
