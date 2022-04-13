@@ -1,5 +1,5 @@
 #!/bin/sh
-. /usr/src/ci/foundation.sh
+. $1/ci/foundation.sh
 
 make packagekernel DISTDIR=$dist_dir $options
 make packageworld  DISTDIR=$dist_dir $options

@@ -1,4 +1,4 @@
 #!/bin/sh
-. /usr/src/ci/foundation.sh
+. $1/ci/foundation.sh
 
 make clean
