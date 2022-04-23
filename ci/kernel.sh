@@ -28,5 +28,5 @@
 
 # echo "MODULES_OVERRIDE=" > /etc/make.conf
 
-mkdir -p $work_dir/amd64.amd64/sys/MINIMAL
-make -j$ncpu $options KERNCONF=MINIMAL buildkernel
+mkdir -p $work_dir/amd64.amd64/sys/GENERIC
+make -j$ncpu $options KERNCONF=GENERIC buildkernel
