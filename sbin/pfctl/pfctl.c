@@ -1016,6 +1016,18 @@ pfctl_print_eth_rule_counters(struct pfctl_eth_rule *rule, int opts)
 			    (unsigned long long)(rule->bytes[0] +
 			    rule->bytes[1]));
 	}
+	if (opts & PF_OPT_VERBOSE2) {
+		char timestr[30];
+
+		if (rule->last_active_timestamp != 0) {
+			time_t last_active = rule->last_active_timestamp;
+			bcopy(ctime(&last_active), timestr, sizeof(timestr));
+			*strchr(timestr, '\n') = '\0';
+		} else {
+			snprintf(timestr, sizeof(timestr), "N/A");
+		}
+		printf("  [ Last Active Time: %s ]\n", timestr);
+	}
 }
 
 void
@@ -1054,6 +1066,17 @@ pfctl_print_rule_counters(struct pfctl_rule *rule, int opts)
 			    "State Creations: %-6ju]\n",
 			    (unsigned)rule->cuid, (unsigned)rule->cpid,
 			    (uintmax_t)rule->states_tot);
+	}
+	if (opts & PF_OPT_VERBOSE2) {
+		char timestr[30];
+		if (rule->last_active_timestamp != 0) {
+			time_t last_active = rule->last_active_timestamp;
+			bcopy(ctime(&last_active), timestr, sizeof(timestr));
+			*strchr(timestr, '\n') = '\0';
+		} else {
+			snprintf(timestr, sizeof(timestr), "N/A");
+		}
+		printf("  [ Last Active Time: %s ]\n", timestr);
 	}
 }
 
@@ -1248,13 +1271,11 @@ pfctl_show_rules(int dev, char *path, int opts, enum pfctl_show format,
 			   ((void *)p == (void *)anchor_call ||
 			   *(--p) == '/')) || (opts & PF_OPT_RECURSE))) {
 				brace++;
-				if ((p = strrchr(anchor_call, '/')) !=
-				    NULL)
-					p++;
-				else
-					p = &anchor_call[0];
-			} else
-				p = &anchor_call[0];
+				int aclen = strlen(anchor_call);
+				if (anchor_call[aclen - 1] == '*')
+					anchor_call[aclen - 2] = '\0';
+			}
+			p = &anchor_call[0];
 		
 			print_rule(&rule, p, rule_numbers, numeric);
 			if (brace)

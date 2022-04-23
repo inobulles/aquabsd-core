@@ -2869,20 +2869,23 @@ sctp_timer_stop(int t_type, struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 		 * counts that were incremented in sctp_timer_start().
 		 */
 		if (tmr->ep != NULL) {
-			SCTP_INP_DECR_REF(inp);
 			tmr->ep = NULL;
+			SCTP_INP_DECR_REF(inp);
 		}
 		if (tmr->tcb != NULL) {
-			atomic_subtract_int(&stcb->asoc.refcnt, 1);
 			tmr->tcb = NULL;
+			atomic_subtract_int(&stcb->asoc.refcnt, 1);
 		}
 		if (tmr->net != NULL) {
+			struct sctp_nets *tmr_net;
+
 			/*
 			 * Can't use net, since it doesn't work for
 			 * SCTP_TIMER_TYPE_ASCONF.
 			 */
-			sctp_free_remote_addr((struct sctp_nets *)tmr->net);
+			tmr_net = tmr->net;
 			tmr->net = NULL;
+			sctp_free_remote_addr(tmr_net);
 		}
 	} else {
 		SCTPDBG(SCTP_DEBUG_TIMER2,
@@ -4836,7 +4839,10 @@ sctp_wakeup_the_read_socket(struct sctp_inpcb *inp,
     SCTP_UNUSED
 )
 {
-	if ((inp != NULL) && (inp->sctp_socket != NULL)) {
+	if ((inp != NULL) &&
+	    (inp->sctp_socket != NULL) &&
+	    (((inp->sctp_flags & (SCTP_PCB_FLAGS_TCPTYPE | SCTP_PCB_FLAGS_IN_TCPPOOL)) == 0) ||
+	    !SCTP_IS_LISTENING(inp))) {
 		sctp_sorwakeup(inp, inp->sctp_socket);
 	}
 }

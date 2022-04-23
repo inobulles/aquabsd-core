@@ -127,7 +127,7 @@ newnfs_vncmpf(struct vnode *vp, void *arg)
 int
 nfscl_nget(struct mount *mntp, struct vnode *dvp, struct nfsfh *nfhp,
     struct componentname *cnp, struct thread *td, struct nfsnode **npp,
-    void *stuff, int lkflags)
+    int lkflags)
 {
 	struct nfsnode *np, *dnp;
 	struct vnode *vp, *nvp;
@@ -433,7 +433,7 @@ ncl_copy_vattr(struct vattr *dst, struct vattr *src)
  */
 int
 nfscl_loadattrcache(struct vnode **vpp, struct nfsvattr *nap, void *nvaper,
-    void *stuff, int writeattr, int dontshrink)
+    int writeattr, int dontshrink)
 {
 	struct vnode *vp = *vpp;
 	struct vattr *vap, *nvap = &nap->na_vattr, *vaper = nvaper;
