@@ -26,7 +26,7 @@
 # 	evdev \
 # 	uinput" > /etc/make.conf
 
-echo "MODULES_OVERRIDE=" > /etc/make.conf
+# echo "MODULES_OVERRIDE=" > /etc/make.conf
 
 mkdir -p $work_dir/amd64.amd64/sys/MINIMAL
 make -j$ncpu $options KERNCONF=MINIMAL buildkernel

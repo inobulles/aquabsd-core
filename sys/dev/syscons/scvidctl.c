@@ -560,7 +560,7 @@ sc_vid_ioctl(struct tty *tp, u_long cmd, caddr_t data, struct thread *td)
 	    return sc_set_text_mode(scp, tp, *(int *)data, 0, 0, 0, 0);
 #endif /* SC_NO_MODE_CHANGE */
 
-    case OLD_CONS_MODEINFO:	/* get mode information (old infterface) */
+    case OLD_CONS_MODEINFO:	/* get mode information (old interface) */
 	info.vi_mode = ((old_video_info_t *)data)->vi_mode;
 	error = fb_ioctl(adp, FBIO_MODEINFO, &info);
 	if (error == 0)
