@@ -608,6 +608,10 @@ ndaoninvalidate(struct cam_periph *periph)
 	 */
 	cam_iosched_flush(softc->cam_iosched, NULL, ENXIO);
 
+	/*
+	 * Tell GEOM that we've gone away, we'll get a callback when it is
+	 * done cleaning up its resources.
+	 */
 	disk_gone(softc->disk);
 }
 
@@ -694,9 +698,9 @@ ndaasync(void *callback_arg, u_int32_t code,
 	}
 	case AC_LOST_DEVICE:
 	default:
-		cam_periph_async(periph, code, path, arg);
 		break;
 	}
+	cam_periph_async(periph, code, path, arg);
 }
 
 static void

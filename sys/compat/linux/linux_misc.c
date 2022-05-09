@@ -910,6 +910,9 @@ static int
 linux_utimensat_lts64_to_ts(struct l_timespec64 *l_times, struct timespec *times)
 {
 
+	/* Zero out the padding in compat mode. */
+	l_times->tv_nsec &= 0xFFFFFFFFUL;
+
 	if (l_times->tv_nsec != LINUX_UTIME_OMIT &&
 	    l_times->tv_nsec != LINUX_UTIME_NOW &&
 	    (l_times->tv_nsec < 0 || l_times->tv_nsec > 999999999))
@@ -2377,15 +2380,11 @@ linux_prlimit64(struct thread *td, struct linux_prlimit64_args *args)
 int
 linux_pselect6(struct thread *td, struct linux_pselect6_args *args)
 {
-	struct l_timespec lts;
 	struct timespec ts, *tsp;
 	int error;
 
 	if (args->tsp != NULL) {
-		error = copyin(args->tsp, &lts, sizeof(lts));
-		if (error != 0)
-			return (error);
-		error = linux_to_native_timespec(&ts, &lts);
+		error = linux_get_timespec(&ts, args->tsp);
 		if (error != 0)
 			return (error);
 		tsp = &ts;
@@ -2394,14 +2393,9 @@ linux_pselect6(struct thread *td, struct linux_pselect6_args *args)
 
 	error = linux_common_pselect6(td, args->nfds, args->readfds,
 	    args->writefds, args->exceptfds, tsp, args->sig);
-	if (error != 0)
-		return (error);
 
-	if (args->tsp != NULL) {
-		error = native_to_linux_timespec(&lts, tsp);
-		if (error == 0)
-			error = copyout(&lts, args->tsp, sizeof(lts));
-	}
+	if (args->tsp != NULL)
+		linux_put_timespec(&ts, args->tsp);
 	return (error);
 }
 
@@ -2452,21 +2446,17 @@ linux_common_pselect6(struct thread *td, l_int nfds, l_fd_set *readfds,
 	error = kern_pselect(td, nfds, readfds, writefds,
 	    exceptfds, tvp, ssp, LINUX_NFDBITS);
 
-	if (error == 0 && tsp != NULL) {
-		if (td->td_retval[0] != 0) {
-			/*
-			 * Compute how much time was left of the timeout,
-			 * by subtracting the current time and the time
-			 * before we started the call, and subtracting
-			 * that result from the user-supplied value.
-			 */
-
-			microtime(&tv1);
-			timevalsub(&tv1, &tv0);
-			timevalsub(&utv, &tv1);
-			if (utv.tv_sec < 0)
-				timevalclear(&utv);
-		} else
+	if (tsp != NULL) {
+		/*
+		 * Compute how much time was left of the timeout,
+		 * by subtracting the current time and the time
+		 * before we started the call, and subtracting
+		 * that result from the user-supplied value.
+		 */
+		microtime(&tv1);
+		timevalsub(&tv1, &tv0);
+		timevalsub(&utv, &tv1);
+		if (utv.tv_sec < 0)
 			timevalclear(&utv);
 		TIMEVAL_TO_TIMESPEC(&utv, tsp);
 	}
@@ -2478,15 +2468,11 @@ int
 linux_pselect6_time64(struct thread *td,
     struct linux_pselect6_time64_args *args)
 {
-	struct l_timespec64 lts;
 	struct timespec ts, *tsp;
 	int error;
 
 	if (args->tsp != NULL) {
-		error = copyin(args->tsp, &lts, sizeof(lts));
-		if (error != 0)
-			return (error);
-		error = linux_to_native_timespec64(&ts, &lts);
+		error = linux_get_timespec64(&ts, args->tsp);
 		if (error != 0)
 			return (error);
 		tsp = &ts;
@@ -2495,14 +2481,9 @@ linux_pselect6_time64(struct thread *td,
 
 	error = linux_common_pselect6(td, args->nfds, args->readfds,
 	    args->writefds, args->exceptfds, tsp, args->sig);
-	if (error != 0)
-		return (error);
 
-	if (args->tsp != NULL) {
-		error = native_to_linux_timespec64(&lts, tsp);
-		if (error == 0)
-			error = copyout(&lts, args->tsp, sizeof(lts));
-	}
+	if (args->tsp != NULL)
+		linux_put_timespec64(&ts, args->tsp);
 	return (error);
 }
 #endif /* __i386__ || (__amd64__ && COMPAT_LINUX32) */
@@ -2511,14 +2492,10 @@ int
 linux_ppoll(struct thread *td, struct linux_ppoll_args *args)
 {
 	struct timespec uts, *tsp;
-	struct l_timespec lts;
 	int error;
 
 	if (args->tsp != NULL) {
-		error = copyin(args->tsp, &lts, sizeof(lts));
-		if (error)
-			return (error);
-		error = linux_to_native_timespec(&uts, &lts);
+		error = linux_get_timespec(&uts, args->tsp);
 		if (error != 0)
 			return (error);
 		tsp = &uts;
@@ -2527,13 +2504,8 @@ linux_ppoll(struct thread *td, struct linux_ppoll_args *args)
 
 	error = linux_common_ppoll(td, args->fds, args->nfds, tsp,
 	    args->sset, args->ssize);
-	if (error != 0)
-		return (error);
-	if (tsp != NULL) {
-		error = native_to_linux_timespec(&lts, tsp);
-		if (error == 0)
-			error = copyout(&lts, args->tsp, sizeof(lts));
-	}
+	if (error == 0 && args->tsp != NULL)
+		error = linux_put_timespec(&uts, args->tsp);
 	return (error);
 }
 
@@ -2598,14 +2570,10 @@ int
 linux_ppoll_time64(struct thread *td, struct linux_ppoll_time64_args *args)
 {
 	struct timespec uts, *tsp;
-	struct l_timespec64 lts;
 	int error;
 
 	if (args->tsp != NULL) {
-		error = copyin(args->tsp, &lts, sizeof(lts));
-		if (error != 0)
-			return (error);
-		error = linux_to_native_timespec64(&uts, &lts);
+		error = linux_get_timespec64(&uts, args->tsp);
 		if (error != 0)
 			return (error);
 		tsp = &uts;
@@ -2613,13 +2581,8 @@ linux_ppoll_time64(struct thread *td, struct linux_ppoll_time64_args *args)
  		tsp = NULL;
 	error = linux_common_ppoll(td, args->fds, args->nfds, tsp,
 	    args->sset, args->ssize);
-	if (error != 0)
-		return (error);
-	if (tsp != NULL) {
-		error = native_to_linux_timespec64(&lts, tsp);
-		if (error == 0)
-			error = copyout(&lts, args->tsp, sizeof(lts));
-	}
+	if (error == 0 && args->tsp != NULL)
+		error = linux_put_timespec64(&uts, args->tsp);
 	return (error);
 }
 #endif /* __i386__ || (__amd64__ && COMPAT_LINUX32) */
@@ -2666,12 +2629,10 @@ linux_pollout(struct thread *td, struct pollfd *fds, struct pollfd *ufds, u_int 
 	return (0);
 }
 
-int
-linux_sched_rr_get_interval(struct thread *td,
-    struct linux_sched_rr_get_interval_args *uap)
+static int
+linux_sched_rr_get_interval_common(struct thread *td, pid_t pid,
+    struct timespec *ts)
 {
-	struct timespec ts;
-	struct l_timespec lts;
 	struct thread *tdt;
 	int error;
 
@@ -2679,22 +2640,45 @@ linux_sched_rr_get_interval(struct thread *td,
 	 * According to man in case the invalid pid specified
 	 * EINVAL should be returned.
 	 */
-	if (uap->pid < 0)
+	if (pid < 0)
 		return (EINVAL);
 
-	tdt = linux_tdfind(td, uap->pid, -1);
+	tdt = linux_tdfind(td, pid, -1);
 	if (tdt == NULL)
 		return (ESRCH);
 
-	error = kern_sched_rr_get_interval_td(td, tdt, &ts);
+	error = kern_sched_rr_get_interval_td(td, tdt, ts);
 	PROC_UNLOCK(tdt->td_proc);
-	if (error != 0)
-		return (error);
-	error = native_to_linux_timespec(&lts, &ts);
-	if (error != 0)
-		return (error);
-	return (copyout(&lts, uap->interval, sizeof(lts)));
+	return (error);
 }
+
+int
+linux_sched_rr_get_interval(struct thread *td,
+    struct linux_sched_rr_get_interval_args *uap)
+{
+	struct timespec ts;
+	int error;
+
+	error = linux_sched_rr_get_interval_common(td, uap->pid, &ts);
+	if (error != 0)
+		return (error);
+	return (linux_put_timespec(&ts, uap->interval));
+}
+
+#if defined(__i386__) || (defined(__amd64__) && defined(COMPAT_LINUX32))
+int
+linux_sched_rr_get_interval_time64(struct thread *td,
+    struct linux_sched_rr_get_interval_time64_args *uap)
+{
+	struct timespec ts;
+	int error;
+
+	error = linux_sched_rr_get_interval_common(td, uap->pid, &ts);
+	if (error != 0)
+		return (error);
+	return (linux_put_timespec64(&ts, uap->interval));
+}
+#endif
 
 /*
  * In case when the Linux thread is the initial thread in
@@ -2710,34 +2694,34 @@ linux_tdfind(struct thread *td, lwpid_t tid, pid_t pid)
 
 	tdt = NULL;
 	if (tid == 0 || tid == td->td_tid) {
-		tdt = td;
-		PROC_LOCK(tdt->td_proc);
+		if (pid != -1 && td->td_proc->p_pid != pid)
+			return (NULL);
+		PROC_LOCK(td->td_proc);
+		return (td);
 	} else if (tid > PID_MAX)
-		tdt = tdfind(tid, pid);
-	else {
-		/*
-		 * Initial thread where the tid equal to the pid.
-		 */
-		p = pfind(tid);
-		if (p != NULL) {
-			if (SV_PROC_ABI(p) != SV_ABI_LINUX) {
-				/*
-				 * p is not a Linuxulator process.
-				 */
-				PROC_UNLOCK(p);
-				return (NULL);
-			}
-			FOREACH_THREAD_IN_PROC(p, tdt) {
-				em = em_find(tdt);
-				if (tid == em->em_tid)
-					return (tdt);
-			}
-			PROC_UNLOCK(p);
-		}
-		return (NULL);
-	}
+		return (tdfind(tid, pid));
 
-	return (tdt);
+	/*
+	 * Initial thread where the tid equal to the pid.
+	 */
+	p = pfind(tid);
+	if (p != NULL) {
+		if (SV_PROC_ABI(p) != SV_ABI_LINUX ||
+		    (pid != -1 && tid != pid)) {
+			/*
+			 * p is not a Linuxulator process.
+			 */
+			PROC_UNLOCK(p);
+			return (NULL);
+		}
+		FOREACH_THREAD_IN_PROC(p, tdt) {
+			em = em_find(tdt);
+			if (tid == em->em_tid)
+				return (tdt);
+		}
+		PROC_UNLOCK(p);
+	}
+	return (NULL);
 }
 
 void

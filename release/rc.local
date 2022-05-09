@@ -1,6 +1,9 @@
 #!/bin/sh
 # $FreeBSD$
 
+# query terminal size; useful for serial lines
+resizewin -z
+
 set_colour() {
 	echo -e "\e[33m"
 }
