@@ -61,6 +61,11 @@ fi
 RELEASE="${REVISION}-${BRANCH}"
 VERSION="${TYPE} ${RELEASE}"
 
+# the following string must be updated on each update of the FreeBSD ABI
+# (see https://github.com/inobulles/aquabsd-core/commit/f9ee4156741a205c93ae947595b5c48717107d9e)
+
+FBSD_REVISION="14.0"
+
 if [ -z "${SYSDIR}" ]; then
     SYSDIR=$(dirname $0)/..
 fi
