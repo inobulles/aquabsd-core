@@ -111,7 +111,7 @@ c_flag_body()
 atf_test_case b_flag
 b_flag_head()
 {
-	atf_set "descr" "Verify -c output"
+	atf_set "descr" "Verify -b output"
 }
 b_flag_body()
 {
