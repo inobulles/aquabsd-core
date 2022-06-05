@@ -16,9 +16,9 @@ The jail you create just needs to have a C/C++ compilation toolchain ready, noth
 Once your jail is created, clone the sources of this repo somewhere, and create a symbolic link:
 
 ```sh
-% git clone https://github.com/inobulles/aquabsd-core
-% mount -t nullfs aquabsd-core $JAIL_PATH/usr/src
-% ls $JAIL_PATH/usr/src/
+git clone https://github.com/inobulles/aquabsd-core
+mount -t nullfs aquabsd-core $JAIL_PATH/usr/src
+ls $JAIL_PATH/usr/src/
 ```
 
 (`mount -t nullfs` is equivalent to `mount --bind` on GNU/Linux.)
@@ -26,21 +26,33 @@ Once your jail is created, clone the sources of this repo somewhere, and create 
 If you're using a chroot, you must mount `devfs`:
 
 ```sh
-% mount -t devfs devfs $JAIL_PATH/dev
+mount -t devfs devfs $JAIL_PATH/dev
 ```
 
 Then, it's just a matter of running the build scripts in the jail:
 
 ```sh
-% chroot $JAIL_PATH sh /usr/src/ci/clean.sh /usr/src
-% chroot $JAIL_PATH sh /usr/src/ci/setup.sh /usr/src
-% chroot $JAIL_PATH sh /usr/src/ci/kernel.sh /usr/src
-% chroot $JAIL_PATH sh /usr/src/ci/base.sh /usr/src
-% chroot $JAIL_PATH sh /usr/src/ci/distribute.sh /usr/src
-% chroot $JAIL_PATH sh /usr/src/ci/package.sh /usr/src
+chroot $JAIL_PATH sh /usr/src/ci/clean.sh /usr/src
+chroot $JAIL_PATH sh /usr/src/ci/setup.sh /usr/src
+chroot $JAIL_PATH sh /usr/src/ci/kernel.sh /usr/src
+chroot $JAIL_PATH sh /usr/src/ci/base.sh /usr/src
+chroot $JAIL_PATH sh /usr/src/ci/distribute.sh /usr/src
+chroot $JAIL_PATH sh /usr/src/ci/package.sh /usr/src
 ```
 
 Building the kernel should take about 10 minutes on the first run, and then subsequent runs should only take a few seconds to a minute.
 
 Once all that has finished, you should get two artifacts (`kernel.txz` & `base.txz`) in `aquabsd-core/artifacts`.
 These artifacts can then either be directly installed, either be converted to a bootable image with [Bob the Builder](https://github.com/inobulles/aquabsd-builder).
+
+### Note on jails with older compiler versions
+
+aquaBSD core currently requires at minimum the LLVM 14 toolchain to compile.
+If your jail's default compiler is older than this, you may install a newer version and link it to `cc` & `c++` from within the jail:
+
+```console
+ASSUME_ALWAYS_YES= pkg install llvm14
+rm /usr/bin/cc /usr/bin/c++
+ln -s /usr/local/bin/clang14 /usr/bin/cc
+ln -s /usr/local/bin/clang++14 /usr/bin/c++
+```
