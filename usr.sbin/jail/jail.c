@@ -996,7 +996,7 @@ static void
 show_jails(void)
 {
 	struct cfjail *j;
-	
+
 	TAILQ_FOREACH(j, &cfjails, tq)
 		print_jail(stdout, j, 0, 0);
 }
