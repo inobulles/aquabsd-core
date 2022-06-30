@@ -136,7 +136,7 @@ static int f_numericonly;	/* don't convert uid/gid to name */
        int f_octal_escape;	/* like f_octal but use C escapes if possible */
 static int f_recursive;		/* ls subdirectories also */
 static int f_reversesort;	/* reverse whatever sort is used */
-static int f_verssort;		/* sort names using strverscmp rather than strcoll */
+static int f_verssort;		/* sort names using strverscmp(3) rather than strcoll(3) */
        int f_samesort;		/* sort time and name in same direction */
        int f_sectime;		/* print full time information */
 static int f_singlecol;		/* use single column output */
