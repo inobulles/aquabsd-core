@@ -16,7 +16,7 @@ MISRCS+=bcmp.c bcopy.c bzero.c explicit_bzero.c \
 	strcspn.c strdup.c strerror.c strlcat.c strlcpy.c strlen.c strmode.c \
 	strncat.c strncmp.c strncpy.c strndup.c strnlen.c strnstr.c \
 	strpbrk.c strrchr.c strsep.c strsignal.c strspn.c strstr.c strtok.c \
-	strxfrm.c swab.c \
+	strverscmp.c strxfrm.c swab.c \
 	timingsafe_bcmp.c \
 	timingsafe_memcmp.c \
 	wcpcpy.c wcpncpy.c wcscasecmp.c wcscat.c \
