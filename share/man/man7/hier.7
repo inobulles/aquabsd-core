@@ -28,7 +28,7 @@
 .\"	@(#)hier.7	8.1 (Berkeley) 6/5/93
 .\" $FreeBSD$
 .\"
-.Dd March 14, 2022
+.Dd June 28, 2022
 .Dt HIER 7
 .Os
 .Sh NAME
@@ -433,9 +433,11 @@ and
 .Po mimics
 .Pa /etc Ns Pc .
 .It Pa obj/
-architecture-specific target tree produced by building the
-.Pa /usr/src
-tree
+architecture-specific target tree produced by building
+.Fx
+from source;
+see
+.Xr build 7
 .It Pa ports/
 .Fx
 ports collection; see
@@ -863,7 +865,9 @@ system since it was booted
 .Pp
 .Bl -tag -width Fl -compact
 .It Pa bhyve/
-bhyve vm unix domain sockets
+.Xr bhyve 8
+virtual machine
+.Xr unix 4 Ns -domain sockets
 .It Pa ppp/
 writable by the
 .Dq network
@@ -891,7 +895,9 @@ undelivered submission mail queue;
 see
 .Xr sendmail 8
 .It Pa ftp/
-commonly ~ftp; the anonymous ftp root directory
+ftp root directory;
+see
+.Xr ftpd 8
 .It Pa mqueue/
 undelivered mail queue;
 see
