@@ -214,8 +214,8 @@ if __name__ == "__main__":
         check_required_make_env_var("CC", default_cc, parsed_args.host_bindir)
         check_required_make_env_var("CXX", default_cxx,
                                     parsed_args.host_bindir)
-        #check_required_make_env_var("CPP", default_cpp,
-        #                            parsed_args.host_bindir)
+        check_required_make_env_var("CPP", default_cpp,
+                                    parsed_args.host_bindir)
         # Using the default value for LD is fine (but not for XLD!)
 
         # On non-FreeBSD we need to explicitly pass XCC/XLD/X_COMPILER_TYPE
