@@ -80,6 +80,9 @@ int strverscmp(const char* s1, const char* s2) {
 		// no leading; we're simply comparing two numbers
 
 		else if (isdigit(*u1) && isdigit(*u2)) {
+			const unsigned char* o1 = u1;
+			const unsigned char* o2 = u2;
+
 			// count digits (more digits == larger number)
 
 			unsigned n1 = 0;
@@ -90,6 +93,17 @@ int strverscmp(const char* s1, const char* s2) {
 
 			if (n1 != n2) {
 				return n1 - n2;
+			}
+
+			// if there're the same number of digits,
+			// go back and compare each digit until there are none left
+
+			u1 = o1, u2 = o2;
+
+			for (; isdigit(*u1) && isdigit(*u2); u1++, u2++) {
+				if (*u1 != *u2) {
+					return *u1 - *u2;
+				}
 			}
 
 			u1--, u2--;
