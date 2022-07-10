@@ -856,11 +856,8 @@ v_flag_body()
 {
 	create_test_dir
 
-	atf_check -e empty -o empty -s exit:0 touch 9
-	atf_check -e empty -o empty -s exit:0 touch 10
-
-	atf_check -e empty -o match:"9" -s exit:0 sh -c 'ls | tail -n1'
-	atf_check -e empty -o match:"10" -s exit:0 sh -c 'ls -v | tail -n1'
+	atf_check -e empty -o empty -s exit:0 touch 000 00 01 010 09 0 1 9 10
+	atf_check -e empty -o match:"000.00.01.010.09.0.1.9.10" -s exit:0 sh -c 'ls -Cv'
 }
 
 atf_test_case x_flag
