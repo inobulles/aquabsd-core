@@ -531,6 +531,13 @@ ovpn_new_peer(struct ifnet *ifp, const nvlist_t *nvl)
 	free(name, M_SONAME);
 	name = NULL;
 
+	if (peer->local.ss_family == AF_INET6 &&
+	    IN6_IS_ADDR_V4MAPPED(&TO_IN6(&peer->remote)->sin6_addr)) {
+		/* V4 mapped address, so treat this as v4, not v6. */
+		in6_sin6_2_sin_in_sock((struct sockaddr *)&peer->local);
+		in6_sin6_2_sin_in_sock((struct sockaddr *)&peer->remote);
+	}
+
 #ifdef INET6
 	if (peer->local.ss_family == AF_INET6 &&
 	    IN6_IS_ADDR_UNSPECIFIED(&TO_IN6(&peer->local)->sin6_addr)) {
@@ -1434,6 +1441,10 @@ ovpn_finish_rx(struct ovpn_softc *sc, struct mbuf *m,
 
 	/* Ensure we can read the first byte. */
 	m = m_pullup(m, 1);
+	if (m == NULL) {
+		OVPN_COUNTER_ADD(sc, nomem_data_pkts_in, 1);
+		return;
+	}
 
 	/*
 	 * Check for address family, and disregard any control packets (e.g.
@@ -2069,11 +2080,14 @@ ovpn_peer_from_mbuf(struct ovpn_softc *sc, struct mbuf *m, int off)
 {
 	struct ovpn_wire_header ohdr;
 	uint32_t peerid;
+	const size_t hdrlen = sizeof(ohdr) - sizeof(ohdr.auth_tag);
 
 	OVPN_RASSERT(sc);
 
-	m_copydata(m, off + sizeof(struct udphdr),
-	    sizeof(ohdr) - sizeof(ohdr.auth_tag), (caddr_t)&ohdr);
+	if (m_length(m, NULL) < (off + sizeof(struct udphdr) + hdrlen))
+		return (NULL);
+
+	m_copydata(m, off + sizeof(struct udphdr), hdrlen, (caddr_t)&ohdr);
 
 	peerid = ntohl(ohdr.opcode) & 0x00ffffff;
 
