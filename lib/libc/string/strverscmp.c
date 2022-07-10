@@ -48,7 +48,7 @@ int strverscmp(const char* s1, const char* s2) {
 	for (; *u1 && *u2; u1++, u2++) {
 		// leading zeroes; we're dealing with the fractional part of a number
 
-		if (*u1 == '0' && *u2 == '0') {
+		if (*u1 == '0' || *u2 == '0') {
 			// count leading zeros (more leading zeroes == smaller number)
 
 			unsigned n1 = 0;
@@ -73,6 +73,8 @@ int strverscmp(const char* s1, const char* s2) {
 					return *u1 - *u2;
 				}
 			}
+
+			u1--, u2--;
 		}
 
 		// no leading; we're simply comparing two numbers
@@ -89,6 +91,8 @@ int strverscmp(const char* s1, const char* s2) {
 			if (n1 != n2) {
 				return n1 - n2;
 			}
+
+			u1--, u2--;
 		}
 
 		// for the rest, we can just fallback to a regular strcmp
