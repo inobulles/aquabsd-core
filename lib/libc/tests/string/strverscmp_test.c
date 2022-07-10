@@ -30,55 +30,79 @@
 __FBSDID("$FreeBSD$");
 
 #include <string.h>
-
 #include <atf-c.h>
+
+static void check_all(int len, const char* ordered[len]) {
+	for (size_t i = 0; i < len; i++) {
+		for (size_t j = 0; j < len; j++) {
+			const char* a = ordered[i];
+			const char* b = ordered[j];
+
+			if (i == j) {
+				ATF_CHECK_MSG(
+					strverscmp(a, b) == 0,
+					"strverscmp(\"%s\", \"%s\") == 0",
+					a, b);
+			}
+
+			else if (i < j) {
+				ATF_CHECK_MSG(
+					strverscmp(a, b) < 0,
+					"strverscmp(\"%s\", \"%s\") < 0",
+					a, b);
+			}
+
+			else if (i > j) {
+				ATF_CHECK_MSG(
+					strverscmp(a, b) > 0,
+					"strverscmp(\"%s\", \"%s\") > 0",
+					a, b);
+			}
+		}
+	}
+}
+
+#define CHECK_ALL(...) \
+	const char* ordered[] = { __VA_ARGS__ }; \
+	check_all(sizeof(ordered) / sizeof(*ordered), ordered);
 
 ATF_TC_WITHOUT_HEAD(strcmp_functionality);
 ATF_TC_BODY(strcmp_functionality, tc) {
-	ATF_CHECK(strverscmp("", "") == 0);
-	ATF_CHECK(strverscmp("a", "a") == 0);
-	ATF_CHECK(strverscmp("a", "b") < 0);
-	ATF_CHECK(strverscmp("b", "a") > 0);
+	CHECK_ALL("", "a", "b")
 }
+
+// from Linux man page
 
 ATF_TC_WITHOUT_HEAD(vers_ordering);
 ATF_TC_BODY(vers_ordering, tc) {
-	ATF_CHECK(strverscmp("000", "00") < 0);
-	ATF_CHECK(strverscmp("00", "000") > 0);
-	ATF_CHECK(strverscmp("a0", "a") > 0);
-	ATF_CHECK(strverscmp("00", "01") < 0);
-	ATF_CHECK(strverscmp("01", "010") < 0);
-	ATF_CHECK(strverscmp("010", "09") < 0);
-	ATF_CHECK(strverscmp("09", "0") < 0);
-	ATF_CHECK(strverscmp("9", "10") < 0);
-	ATF_CHECK(strverscmp("0a", "0") > 0);
+	CHECK_ALL("000", "00", "01", "010", "09", "0", "1", "9", "10")
+}
+
+ATF_TC_WITHOUT_HEAD(natural_ordering);
+ATF_TC_BODY(natural_ordering, tc) {
+	CHECK_ALL("jan1", "jan2", "jan9", "jan10", "jan11", "jan19", "jan20")
 }
 
 // https://sourceware.org/bugzilla/show_bug.cgi?id=9913
 
 ATF_TC_WITHOUT_HEAD(glibc_bug_9913);
 ATF_TC_BODY(glibc_bug_9913, tc) {
-	const char* a = "B0075022800016.gbp.corp.com";
-	const char* b = "B007502280067.gbp.corp.com";
-	const char* c = "B007502357019.GBP.CORP.COM";
-
-	ATF_CHECK(strverscmp(a, b) < 0);
-	ATF_CHECK(strverscmp(b, c) < 0);
-	ATF_CHECK(strverscmp(a, c) < 0);
-	ATF_CHECK(strverscmp(b, a) > 0);
-	ATF_CHECK(strverscmp(c, b) > 0);
-	ATF_CHECK(strverscmp(c, a) > 0);
+	CHECK_ALL(
+		"B0075022800016.gbp.corp.com",
+		"B007502280067.gbp.corp.com",
+		"B007502357019.GBP.CORP.COM"
+	)
 }
 
 ATF_TC_WITHOUT_HEAD(semver_ordering);
 ATF_TC_BODY(semver_ordering, tc) {
-	ATF_CHECK(strverscmp("2.6.21", "2.6.20") > 0);
-	ATF_CHECK(strverscmp("2.6.20", "2.6.21") < 0);
+	CHECK_ALL("2.6.20", "2.6.21")
 }
 
 ATF_TP_ADD_TCS(tp) {
 	ATF_TP_ADD_TC(tp, strcmp_functionality);
 	ATF_TP_ADD_TC(tp, vers_ordering);
+	ATF_TP_ADD_TC(tp, natural_ordering);
 	ATF_TP_ADD_TC(tp, glibc_bug_9913);
 	ATF_TP_ADD_TC(tp, semver_ordering);
 
