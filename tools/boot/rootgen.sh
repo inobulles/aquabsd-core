@@ -7,22 +7,18 @@ iterations=50000
 
 # The smallest FAT32 filesystem is 33292 KB
 espsize=33292
-dev=vtbd0
 
 #
 # Builds all the bat-shit crazy combinations we support booting from,
 # at least for amd64. It assume you have a ~sane kernel in /boot/kernel
 # and copies that into the ~150MB root images we create (we create the du
-# size of the kernel + 20MB
+# size of the kernel + 20MB).
 #
-# Sad panda sez: this runs as root, but could be userland if someone
-# creates userland geli and zfs tools.
+# Sad panda sez: this runs as root, but could be any user if someone
+# creates userland geli.
 #
 # This assumes an external program install-boot.sh which will install
 # the appropriate boot files in the appropriate locations.
-#
-# These images assume ${dev} will be the root image. We should likely
-# use labels, but we don't.
 #
 # Assumes you've already rebuilt... maybe bad? Also maybe bad: the env
 # vars should likely be conditionally set to allow better automation.
@@ -38,14 +34,20 @@ cpsys() {
     (cd $src ; tar cf - .) | (cd $dst; tar xf -)
 }
 
+ufs_fstab() {
+    src=$1
+
+    cat > ${src}/etc/fstab <<EOF
+/dev/ufs/root	/		ufs	rw	1	1
+EOF
+}
+
 mk_nogeli_gpt_ufs_legacy() {
     src=$1
     img=$2
 
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}p2	/		ufs	rw	1	1
-EOF
-    makefs -t ffs -B little -s 200m ${img}.p2 ${src}
+    ufs_fstab ${src}
+    makefs -t ffs -B little -s 200m -o label=root ${img}.p2 ${src}
     mkimg -s gpt -b ${src}/boot/pmbr \
 	  -p freebsd-boot:=${src}/boot/gptboot \
 	  -p freebsd-ufs:=${img}.p2 -o ${img}
@@ -56,11 +58,9 @@ mk_nogeli_gpt_ufs_uefi() {
     src=$1
     img=$2
 
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}p2	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${src}
     make_esp_file ${img}.p1 ${espsize} ${src}/boot/loader.efi
-    makefs -t ffs -B little -s 200m ${img}.p2 ${src}
+    makefs -t ffs -B little -s 200m -o label=root ${img}.p2 ${src}
     mkimg -s gpt \
 	  -p efi:=${img}.p1 \
 	  -p freebsd-ufs:=${img}.p2 -o ${img}
@@ -71,11 +71,9 @@ mk_nogeli_gpt_ufs_both() {
     src=$1
     img=$2
 
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}p3	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${src}
     make_esp_file ${img}.p1 ${espsize} ${src}/boot/loader.efi
-    makefs -t ffs -B little -s 200m ${img}.p3 ${src}
+    makefs -t ffs -B little -s 200m -o label=root ${img}.p3 ${src}
     # p1 is boot for uefi, p2 is boot for gpt, p3 is /
     mkimg -b ${src}/boot/pmbr -s gpt \
 	  -p efi:=${img}.p1 \
@@ -207,10 +205,8 @@ mk_nogeli_mbr_ufs_legacy() {
     src=$1
     img=$2
 
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}s1a	/		ufs	rw	1	1
-EOF
-    makefs -t ffs -B little -s 200m ${img}.s1a ${src}
+    ufs_fstab ${src}
+    makefs -t ffs -B little -s 200m -o label=root ${img}.s1a ${src}
     mkimg -s bsd -b ${src}/boot/boot -p freebsd-ufs:=${img}.s1a -o ${img}.s1
     mkimg -a 1 -s mbr -b ${src}/boot/boot0sio -p freebsd:=${img}.s1 -o ${img}
     rm -f ${src}/etc/fstab
@@ -220,11 +216,9 @@ mk_nogeli_mbr_ufs_uefi() {
     src=$1
     img=$2
 
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}s2a	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${src}
     make_esp_file ${img}.s1 ${espsize} ${src}/boot/loader.efi
-    makefs -t ffs -B little -s 200m ${img}.s2a ${src}
+    makefs -t ffs -B little -s 200m -o label=root ${img}.s2a ${src}
     mkimg -s bsd -p freebsd-ufs:=${img}.s2a -o ${img}.s2
     mkimg -a 1 -s mbr -p efi:=${img}.s1 -p freebsd:=${img}.s2 -o ${img}
     rm -f ${src}/etc/fstab
@@ -234,11 +228,9 @@ mk_nogeli_mbr_ufs_both() {
     src=$1
     img=$2
 
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}s2a	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${src}
     make_esp_file ${img}.s1 ${espsize} ${src}/boot/loader.efi
-    makefs -t ffs -B little -s 200m ${img}.s2a ${src}
+    makefs -t ffs -B little -s 200m -o label=root ${img}.s2a ${src}
     mkimg -s bsd -b ${src}/boot/boot -p freebsd-ufs:=${img}.s2a -o ${img}.s2
     mkimg -a 2 -s mbr -b ${src}/boot/mbr -p efi:=${img}.s1 -p freebsd:=${img}.s2 -o ${img}
     rm -f ${src}/etc/fstab
@@ -386,16 +378,14 @@ mk_geli_gpt_ufs_legacy() {
     # install-boot will make this bootable
     echo ${passphrase} | geli init -bg -e AES-XTS -i ${iterations} -J - -l 256 -s 4096 ${md}p2
     echo ${passphrase} | geli attach -j - ${md}p2
-    newfs /dev/${md}p2.eli
+    newfs -L root /dev/${md}p2.eli
     mount /dev/${md}p2.eli ${mntpt}
     cpsys ${src} ${mntpt}
     # need to make a couple of tweaks
     cat > ${mntpt}/boot/loader.conf <<EOF
 geom_eli_load=YES
 EOF
-    cat > ${mntpt}/etc/fstab <<EOF
-/dev/${dev}p2.eli	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${mntpt}
 
     cp /boot/kernel/geom_eli.ko ${mntpt}/boot/kernel/geom_eli.ko
     # end tweaks
@@ -422,16 +412,14 @@ mk_geli_gpt_ufs_uefi() {
     # install-boot will make this bootable
     echo ${passphrase} | geli init -bg -e AES-XTS -i ${iterations} -J - -l 256 -s 4096 ${md}p2
     echo ${passphrase} | geli attach -j - ${md}p2
-    newfs /dev/${md}p2.eli
+    newfs -L root /dev/${md}p2.eli
     mount /dev/${md}p2.eli ${mntpt}
     cpsys ${src} ${mntpt}
     # need to make a couple of tweaks
     cat > ${mntpt}/boot/loader.conf <<EOF
 geom_eli_load=YES
 EOF
-    cat > ${mntpt}/etc/fstab <<EOF
-/dev/${dev}p2.eli	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${mntpt}
 
     cp /boot/kernel/geom_eli.ko ${mntpt}/boot/kernel/geom_eli.ko
     # end tweaks
@@ -459,16 +447,14 @@ mk_geli_gpt_ufs_both() {
     # install-boot will make this bootable
     echo ${passphrase} | geli init -bg -e AES-XTS -i ${iterations} -J - -l 256 -s 4096 ${md}p3
     echo ${passphrase} | geli attach -j - ${md}p3
-    newfs /dev/${md}p3.eli
+    newfs -L root /dev/${md}p3.eli
     mount /dev/${md}p3.eli ${mntpt}
     cpsys ${src} ${mntpt}
     # need to make a couple of tweaks
     cat > ${mntpt}/boot/loader.conf <<EOF
 geom_eli_load=YES
 EOF
-    cat > ${mntpt}/etc/fstab <<EOF
-/dev/${dev}p3.eli	/		ufs	rw	1	1
-EOF
+    ufs_fstab ${mntpt}
 
     cp /boot/kernel/geom_eli.ko ${mntpt}/boot/kernel/geom_eli.ko
     # end tweaks
@@ -645,29 +631,6 @@ mk_geli_mbr_zfs_both() {
 # u-boot
 # powerpc
 
-mk_sparc64_nogeli_vtoc8_ufs_ofw() {
-    src=$1
-    img=$2
-    mntpt=$3
-    geli=$4
-    scheme=$5
-    fs=$6
-    bios=$7
-
-    cat > ${src}/etc/fstab <<EOF
-/dev/${dev}a	/		ufs	rw	1	1
-EOF
-    makefs -t ffs -B big -s 200m ${img} ${src}
-    md=$(mdconfig -f ${img})
-    # For non-native builds, ensure that geom_part(4) supports VTOC8.
-    kldload geom_part_vtoc8.ko
-    gpart create -s VTOC8 ${md}
-    gpart add -t freebsd-ufs ${md}
-    ${SRCTOP}/tools/boot/install-boot.sh -g ${geli} -s ${scheme} -f ${fs} -b ${bios} -d ${src} ${md}
-    mdconfig -d -u ${md}
-    rm -f ${src}/etc/fstab
-}
-
 qser="-serial telnet::4444,server -nographic"
 
 # https://wiki.freebsd.org/QemuRecipes
@@ -769,15 +732,9 @@ make_one_image()
     echo "^^^^^^^^^^^^^^   Created $img   ^^^^^^^^^^^^^^^"
 }
 
-# mips
-# qemu-system-mips -kernel /path/to/rootfs/boot/kernel/kernel -nographic -hda /path/to/disk.img -m 2048
-
 # Powerpc -- doesn't work but maybe it would enough for testing -- needs details
 # powerpc64
 # qemu-system-ppc64 -drive file=/path/to/disk.img,format=raw
-
-# sparc64
-# qemu-system-sparc64 -drive file=/path/to/disk.img,format=raw
 
 # Misc variables
 SRCTOP=$(make -v SRCTOP)
@@ -862,9 +819,8 @@ done
 for arch in arm aarch64; do
     for scheme in gpt mbr; do
 	fs=ufs
-	for bios in uboot efi; do
-	    make_one_image ${arch} ${geli} ${scheme} ${fs} ${bios}
-	done
+	bios=efi
+	make_one_image ${arch} ${geli} ${scheme} ${fs} ${bios}
     done
 done
 
@@ -877,14 +833,10 @@ for arch in powerpc powerpc64; do
     done
 done
 
-for arch in sparc64; do
-    for geli in nogeli; do
-	for scheme in vtoc8; do
-	    for fs in ufs; do
-		for bios in ofw; do
-		    make_one_image ${arch} ${geli} ${scheme} ${fs} ${bios}
-		done
-	    done
-	done
-    done
+for arch in riscv; do
+    geli=nogeli
+    fs=ufs
+    scheme=gpt
+    bios=efi
+    make_one_image ${arch} ${geli} ${scheme} ${fs} ${bios}
 done

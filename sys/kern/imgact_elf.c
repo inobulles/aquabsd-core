@@ -1221,9 +1221,16 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 				goto ret;
 			break;
 		case PT_GNU_STACK:
-			if (__elfN(nxstack))
+			if (__elfN(nxstack)) {
 				imgp->stack_prot =
 				    __elfN(trans_prot)(phdr[i].p_flags);
+				if ((imgp->stack_prot & VM_PROT_RW) !=
+				    VM_PROT_RW) {
+					uprintf("Invalid PT_GNU_STACK\n");
+					error = ENOEXEC;
+					goto ret;
+				}
+			}
 			imgp->stack_sz = phdr[i].p_memsz;
 			break;
 		case PT_PHDR: 	/* Program header table info */
@@ -2205,13 +2212,16 @@ __elfN(note_prpsinfo)(void *arg, struct sbuf *sb, size_t *sizep)
 			    sizeof(psinfo->pr_psargs), SBUF_FIXEDLEN);
 			error = proc_getargv(curthread, p, &sbarg);
 			PRELE(p);
-			if (sbuf_finish(&sbarg) == 0)
-				len = sbuf_len(&sbarg) - 1;
-			else
+			if (sbuf_finish(&sbarg) == 0) {
+				len = sbuf_len(&sbarg);
+				if (len > 0)
+					len--;
+			} else {
 				len = sizeof(psinfo->pr_psargs) - 1;
+			}
 			sbuf_delete(&sbarg);
 		}
-		if (error || len == 0)
+		if (error != 0 || len == 0 || (ssize_t)len == -1)
 			strlcpy(psinfo->pr_psargs, p->p_comm,
 			    sizeof(psinfo->pr_psargs));
 		else {

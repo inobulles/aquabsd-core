@@ -239,6 +239,29 @@ domain_add(void *data)
 	mtx_unlock(&dom_mtx);
 }
 
+void
+domain_remove(void *data)
+{
+	struct domain *dp = (struct domain *)data;
+
+	if ((dp->dom_flags & DOMF_UNLOADABLE) == 0)
+		return;
+
+	mtx_lock(&dom_mtx);
+	if (domains == dp) {
+		domains = dp->dom_next;
+	} else {
+		struct domain *curr;
+		for (curr = domains; curr != NULL; curr = curr->dom_next) {
+			if (curr->dom_next == dp) {
+				curr->dom_next = dp->dom_next;
+				break;
+			}
+		}
+	}
+	mtx_unlock(&dom_mtx);
+}
+
 /* ARGSUSED*/
 static void
 domaininit(void *dummy)
@@ -451,7 +474,6 @@ pf_proto_unregister(int family, int protocol, int type)
 	dpr->pr_protocol = PROTO_SPACER;
 	dpr->pr_flags = 0;
 	dpr->pr_input = NULL;
-	dpr->pr_output = NULL;
 	dpr->pr_ctlinput = NULL;
 	dpr->pr_ctloutput = NULL;
 	dpr->pr_fasttimo = NULL;
@@ -463,20 +485,6 @@ pf_proto_unregister(int family, int protocol, int type)
 	mtx_unlock(&dom_mtx);
 
 	return (0);
-}
-
-void
-pfctlinput(int cmd, struct sockaddr *sa)
-{
-	struct domain *dp;
-	struct protosw *pr;
-
-	NET_EPOCH_ASSERT();
-
-	for (dp = domains; dp; dp = dp->dom_next)
-		for (pr = dp->dom_protosw; pr < dp->dom_protoswNPROTOSW; pr++)
-			if (pr->pr_ctlinput)
-				(*pr->pr_ctlinput)(cmd, sa, (void *)0);
 }
 
 static void

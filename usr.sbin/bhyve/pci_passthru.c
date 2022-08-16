@@ -117,7 +117,8 @@ msi_caplen(int msgctrl)
 }
 
 static int
-pcifd_init() {
+pcifd_init(void)
+{
 	pcifd = open(_PATH_DEVPCI, O_RDWR, 0);
 	if (pcifd < 0) {
 		warn("failed to open %s", _PATH_DEVPCI);
@@ -1124,7 +1125,7 @@ passthru_addr(struct vmctx *ctx, struct pci_devinst *pi, int baridx,
 	}
 }
 
-struct pci_devemu passthru = {
+static const struct pci_devemu passthru = {
 	.pe_emu		= "passthru",
 	.pe_init	= passthru_init,
 	.pe_legacy_config = passthru_legacy_config,
