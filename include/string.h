@@ -81,9 +81,9 @@ char	*strcat(char * __restrict, const char * __restrict);
 char	*strchr(const char *, int) __pure;
 #if __BSD_VISIBLE
 char	*strchrnul(const char*, int) __pure;
+int	 strverscmp(const char *, const char *) __pure;
 #endif
 int	 strcmp(const char *, const char *) __pure;
-int	 strverscmp(const char *, const char *) __pure;
 int	 strcoll(const char *, const char *);
 char	*strcpy(char * __restrict, const char * __restrict);
 size_t	 strcspn(const char *, const char *) __pure;

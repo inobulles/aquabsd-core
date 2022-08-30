@@ -105,10 +105,10 @@ typedef	void *	DIR;
 __BEGIN_DECLS
 #if __POSIX_VISIBLE >= 200809 || __XSI_VISIBLE >= 700
 int	 alphasort(const struct dirent **, const struct dirent **);
-int	 versionsort(const struct dirent **, const struct dirent **);
 int	 dirfd(DIR *);
 #endif
 #if __BSD_VISIBLE
+int	 versionsort(const struct dirent **, const struct dirent **);
 DIR	*__opendir2(const char *, int);
 int	 fdclosedir(DIR *);
 ssize_t	 getdents(int, char *, size_t);
@@ -131,6 +131,11 @@ int	 scandir_b(const char *, struct dirent ***,
 	    int (^)(const struct dirent *),
 	    int (^)(const struct dirent **, const struct dirent **));
 #endif
+#endif
+#if __BSD_VISIBLE
+int	 scandirat(int, const char *, struct dirent ***,
+	    int (*)(const struct dirent *), int (*)(const struct dirent **,
+	    const struct dirent **));
 #endif
 #if __XSI_VISIBLE
 void	 seekdir(DIR *, long);
