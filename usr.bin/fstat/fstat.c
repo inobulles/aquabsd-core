@@ -310,7 +310,7 @@ print_file_info(struct procstat *procstat, struct filestat *fst,
 		break;
 	case PS_FST_TYPE_DEV:
 		break;
-	default:	
+	default:
 		if (vflg)
 			fprintf(stderr,
 			    "unknown file type %d for file %d of pid %d\n",
