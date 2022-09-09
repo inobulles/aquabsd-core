@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2020-2021 The FreeBSD Foundation
+ * Copyright (c) 2020-2022 The FreeBSD Foundation
  * Copyright (c) 2020-2022 Bjoern A. Zeeb
  *
  * This software was developed by Björn Zeeb under sponsorship from
@@ -827,7 +827,7 @@ struct ieee80211_ops {
 	int  (*hw_scan)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_scan_request *);
 	void (*cancel_hw_scan)(struct ieee80211_hw *, struct ieee80211_vif *);
 
-	int  (*conf_tx)(struct ieee80211_hw *, struct ieee80211_vif *, u16, const struct ieee80211_tx_queue_params *);
+	int  (*conf_tx)(struct ieee80211_hw *, struct ieee80211_vif *, u32, u16, const struct ieee80211_tx_queue_params *);
 	void (*tx)(struct ieee80211_hw *, struct ieee80211_tx_control *, struct sk_buff *);
 	int  (*tx_last_beacon)(struct ieee80211_hw *);
 	void (*wake_tx_queue)(struct ieee80211_hw *, struct ieee80211_txq *);
@@ -876,8 +876,8 @@ struct ieee80211_ops {
 	int  (*add_chanctx)(struct ieee80211_hw *, struct ieee80211_chanctx_conf *);
 	void (*remove_chanctx)(struct ieee80211_hw *, struct ieee80211_chanctx_conf *);
 	void (*change_chanctx)(struct ieee80211_hw *, struct ieee80211_chanctx_conf *, u32);
-	int  (*assign_vif_chanctx)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_chanctx_conf *);
-	void (*unassign_vif_chanctx)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_chanctx_conf *);
+	int  (*assign_vif_chanctx)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_bss_conf *, struct ieee80211_chanctx_conf *);
+	void (*unassign_vif_chanctx)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_bss_conf *, struct ieee80211_chanctx_conf *);
 	int  (*switch_vif_chanctx)(struct ieee80211_hw *, struct ieee80211_vif_chanctx_switch *, int, enum ieee80211_chanctx_switch_mode);
 
 	int  (*get_antenna)(struct ieee80211_hw *, u32 *, u32 *);
@@ -910,8 +910,8 @@ struct ieee80211_ops {
 	int  (*start_pmsr)(struct ieee80211_hw *, struct ieee80211_vif *, struct cfg80211_pmsr_request *);
 	void (*abort_pmsr)(struct ieee80211_hw *, struct ieee80211_vif *, struct cfg80211_pmsr_request *);
 
-	int  (*start_ap)(struct ieee80211_hw *, struct ieee80211_vif *);
-	void (*stop_ap)(struct ieee80211_hw *, struct ieee80211_vif *);
+	int  (*start_ap)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_bss_conf *link_conf);
+	void (*stop_ap)(struct ieee80211_hw *, struct ieee80211_vif *, struct ieee80211_bss_conf *link_conf);
 	int  (*join_ibss)(struct ieee80211_hw *, struct ieee80211_vif *);
 	void (*leave_ibss)(struct ieee80211_hw *, struct ieee80211_vif *);
 
@@ -967,7 +967,7 @@ void linuxkpi_ieee80211_scan_completed(struct ieee80211_hw *,
     struct cfg80211_scan_info *);
 void linuxkpi_ieee80211_rx(struct ieee80211_hw *, struct sk_buff *,
     struct ieee80211_sta *, struct napi_struct *);
-uint8_t linuxkpi_ieee80211_get_tid(struct ieee80211_hdr *);
+uint8_t linuxkpi_ieee80211_get_tid(struct ieee80211_hdr *, bool);
 struct ieee80211_sta *linuxkpi_ieee80211_find_sta(struct ieee80211_vif *,
     const u8 *);
 struct ieee80211_sta *linuxkpi_ieee80211_find_sta_by_ifaddr(
@@ -1452,12 +1452,12 @@ static __inline uint8_t
 ieee80211_get_tid(struct ieee80211_hdr *hdr)
 {
 
-	return (linuxkpi_ieee80211_get_tid(hdr));
+	return (linuxkpi_ieee80211_get_tid(hdr, false));
 }
 
 static __inline struct sk_buff *
 ieee80211_beacon_get_tim(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-    uint16_t *tim_offset, uint16_t *tim_len)
+    uint16_t *tim_offset, uint16_t *tim_len, uint32_t link_id)
 {
 
 	if (tim_offset != NULL)
@@ -1549,7 +1549,7 @@ ieee80211_vif_to_wdev(struct ieee80211_vif *vif)
 static __inline struct sk_buff *
 ieee80211_beacon_get_template(struct ieee80211_hw *hw,
     struct ieee80211_vif *vif, struct ieee80211_mutable_offsets *offs,
-    int x)
+    uint32_t link_id)
 {
 	TODO();
 	return (NULL);
