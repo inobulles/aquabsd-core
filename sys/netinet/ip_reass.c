@@ -70,7 +70,7 @@ SYSCTL_DECL(_net_inet_ip);
  */
 #define	IPREASS_NHASH_LOG2	10
 #define	IPREASS_NHASH		(1 << IPREASS_NHASH_LOG2)
-#define	IPREASS_HMASK		(IPREASS_NHASH - 1)
+#define	IPREASS_HMASK		(V_ipq_hashsize - 1)
 
 struct ipqbucket {
 	TAILQ_HEAD(ipqhead, ipq) head;
@@ -600,7 +600,8 @@ ipreass_callout(void *arg)
 	CURVNET_SET(bucket->vnet);
 	fp = TAILQ_LAST(&bucket->head, ipqhead);
 	KASSERT(fp != NULL && fp->ipq_expire >= time_uptime,
-	    ("%s: stray callout on bucket %p", __func__, bucket));
+	    ("%s: stray callout on bucket %p, %ju < %ju", __func__, bucket,
+	    fp ? (uintmax_t)fp->ipq_expire : 0, (uintmax_t)time_uptime));
 
 	while (fp != NULL && fp->ipq_expire >= time_uptime) {
 		ipq_timeout(bucket, fp);
@@ -632,16 +633,27 @@ ipreass_reschedule(struct ipqbucket *bucket)
 static void
 ipreass_drain_vnet(void)
 {
+	u_int dropped = 0;
 
 	for (int i = 0; i < V_ipq_hashsize; i++) {
+		bool resched;
+
 		IPQ_LOCK(i);
-		while(!TAILQ_EMPTY(&V_ipq[i].head))
-			ipq_drop(&V_ipq[i], TAILQ_FIRST(&V_ipq[i].head));
+		resched = !TAILQ_EMPTY(&V_ipq[i].head);
+		while(!TAILQ_EMPTY(&V_ipq[i].head)) {
+			struct ipq *fp = TAILQ_FIRST(&V_ipq[i].head);
+
+			dropped += fp->ipq_nfrags;
+			ipq_free(&V_ipq[i], fp);
+		}
+		if (resched)
+			ipreass_reschedule(&V_ipq[i]);
 		KASSERT(V_ipq[i].count == 0,
 		    ("%s: V_ipq[%d] count %d (V_ipq=%p)", __func__, i,
 		    V_ipq[i].count, V_ipq));
 		IPQ_UNLOCK(i);
 	}
+	IPSTAT_ADD(ips_fragdropped, dropped);
 }
 
 /*
@@ -759,6 +771,7 @@ ipreass_destroy(void)
 	V_ipq_zone = NULL;
 	for (int i = 0; i < V_ipq_hashsize; i++)
 		mtx_destroy(&V_ipq[i].lock);
+	free(V_ipq, M_IPREASS_HASH);
 }
 #endif
 
