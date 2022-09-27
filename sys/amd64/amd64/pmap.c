@@ -2390,7 +2390,7 @@ pmap_init_pv_table(void)
 	 */
 	s = (vm_size_t)pv_npg * sizeof(struct md_page);
 	s = round_page(s);
-	pv_table = (struct md_page *)kmem_malloc(s, M_WAITOK | M_ZERO);
+	pv_table = kmem_malloc(s, M_WAITOK | M_ZERO);
 	for (i = 0; i < pv_npg; i++)
 		TAILQ_INIT(&pv_table[i].pv_list);
 	TAILQ_INIT(&pv_dummy.pv_list);
@@ -4997,13 +4997,21 @@ pmap_growkernel(vm_offset_t addr)
 	vm_page_t nkpg;
 	pd_entry_t *pde, newpdir;
 	pdp_entry_t *pdpe;
+	vm_offset_t end;
 
 	mtx_assert(&kernel_map->system_mtx, MA_OWNED);
 
 	/*
-	 * Return if "addr" is within the range of kernel page table pages
-	 * that were preallocated during pmap bootstrap.  Moreover, leave
-	 * "kernel_vm_end" and the kernel page table as they were.
+	 * The kernel map covers two distinct regions of KVA: that used
+	 * for dynamic kernel memory allocations, and the uppermost 2GB
+	 * of the virtual address space.  The latter is used to map the
+	 * kernel and loadable kernel modules.  This scheme enables the
+	 * use of a special code generation model for kernel code which
+	 * takes advantage of compact addressing modes in machine code.
+	 *
+	 * Both regions grow upwards; to avoid wasting memory, the gap
+	 * in between is unmapped.  If "addr" is above "KERNBASE", the
+	 * kernel's region is grown, otherwise the kmem region is grown.
 	 *
 	 * The correctness of this action is based on the following
 	 * argument: vm_map_insert() allocates contiguous ranges of the
@@ -5015,22 +5023,32 @@ pmap_growkernel(vm_offset_t addr)
 	 * any new kernel page table pages between "kernel_vm_end" and
 	 * "KERNBASE".
 	 */
-	if (KERNBASE < addr && addr <= KERNBASE + nkpt * NBPDR)
-		return;
+	if (KERNBASE < addr) {
+		end = KERNBASE + nkpt * NBPDR;
+		if (end == 0)
+			return;
+	} else {
+		end = kernel_vm_end;
+	}
 
 	addr = roundup2(addr, NBPDR);
 	if (addr - 1 >= vm_map_max(kernel_map))
 		addr = vm_map_max(kernel_map);
-	if (kernel_vm_end < addr)
-		kasan_shadow_map(kernel_vm_end, addr - kernel_vm_end);
-	if (kernel_vm_end < addr)
-		kmsan_shadow_map(kernel_vm_end, addr - kernel_vm_end);
-	while (kernel_vm_end < addr) {
-		pdpe = pmap_pdpe(kernel_pmap, kernel_vm_end);
+	if (addr <= end) {
+		/*
+		 * The grown region is already mapped, so there is
+		 * nothing to do.
+		 */
+		return;
+	}
+
+	kasan_shadow_map(end, addr - end);
+	kmsan_shadow_map(end, addr - end);
+	while (end < addr) {
+		pdpe = pmap_pdpe(kernel_pmap, end);
 		if ((*pdpe & X86_PG_V) == 0) {
-			/* We need a new PDP entry */
 			nkpg = pmap_alloc_pt_page(kernel_pmap,
-			    kernel_vm_end >> PDPSHIFT, VM_ALLOC_WIRED |
+			    pmap_pdpe_pindex(end), VM_ALLOC_WIRED |
 			    VM_ALLOC_INTERRUPT | VM_ALLOC_ZERO);
 			if (nkpg == NULL)
 				panic("pmap_growkernel: no memory to grow kernel");
@@ -5039,31 +5057,35 @@ pmap_growkernel(vm_offset_t addr)
 			    X86_PG_A | X86_PG_M);
 			continue; /* try again */
 		}
-		pde = pmap_pdpe_to_pde(pdpe, kernel_vm_end);
+		pde = pmap_pdpe_to_pde(pdpe, end);
 		if ((*pde & X86_PG_V) != 0) {
-			kernel_vm_end = (kernel_vm_end + NBPDR) & ~PDRMASK;
-			if (kernel_vm_end - 1 >= vm_map_max(kernel_map)) {
-				kernel_vm_end = vm_map_max(kernel_map);
+			end = (end + NBPDR) & ~PDRMASK;
+			if (end - 1 >= vm_map_max(kernel_map)) {
+				end = vm_map_max(kernel_map);
 				break;                       
 			}
 			continue;
 		}
 
-		nkpg = pmap_alloc_pt_page(kernel_pmap,
-		    pmap_pde_pindex(kernel_vm_end), VM_ALLOC_WIRED |
-		    VM_ALLOC_INTERRUPT | VM_ALLOC_ZERO);
+		nkpg = pmap_alloc_pt_page(kernel_pmap, pmap_pde_pindex(end),
+		    VM_ALLOC_WIRED | VM_ALLOC_INTERRUPT | VM_ALLOC_ZERO);
 		if (nkpg == NULL)
 			panic("pmap_growkernel: no memory to grow kernel");
 		paddr = VM_PAGE_TO_PHYS(nkpg);
 		newpdir = paddr | X86_PG_V | X86_PG_RW | X86_PG_A | X86_PG_M;
 		pde_store(pde, newpdir);
 
-		kernel_vm_end = (kernel_vm_end + NBPDR) & ~PDRMASK;
-		if (kernel_vm_end - 1 >= vm_map_max(kernel_map)) {
-			kernel_vm_end = vm_map_max(kernel_map);
+		end = (end + NBPDR) & ~PDRMASK;
+		if (end - 1 >= vm_map_max(kernel_map)) {
+			end = vm_map_max(kernel_map);
 			break;                       
 		}
 	}
+
+	if (end <= KERNBASE)
+		kernel_vm_end = end;
+	else
+		nkpt = howmany(end - KERNBASE, NBPDR);
 }
 
 /***************************************************
@@ -7523,8 +7545,9 @@ pmap_enter_quick_locked(pmap_t pmap, vm_offset_t va, vm_page_t m,
 	 * resident, we are creating it here.
 	 */
 	if (va < VM_MAXUSER_ADDRESS) {
+		pdp_entry_t *pdpe;
+		pd_entry_t *pde;
 		vm_pindex_t ptepindex;
-		pd_entry_t *ptepa;
 
 		/*
 		 * Calculate pagetable page index
@@ -7534,30 +7557,34 @@ pmap_enter_quick_locked(pmap_t pmap, vm_offset_t va, vm_page_t m,
 			mpte->ref_count++;
 		} else {
 			/*
-			 * Get the page directory entry
-			 */
-			ptepa = pmap_pde(pmap, va);
-
-			/*
 			 * If the page table page is mapped, we just increment
 			 * the hold count, and activate it.  Otherwise, we
-			 * attempt to allocate a page table page.  If this
-			 * attempt fails, we don't retry.  Instead, we give up.
+			 * attempt to allocate a page table page, passing NULL
+			 * instead of the PV list lock pointer because we don't
+			 * intend to sleep.  If this attempt fails, we don't
+			 * retry.  Instead, we give up.
 			 */
-			if (ptepa && (*ptepa & PG_V) != 0) {
-				if (*ptepa & PG_PS)
+			pdpe = pmap_pdpe(pmap, va);
+			if (pdpe != NULL && (*pdpe & PG_V) != 0) {
+				if ((*pdpe & PG_PS) != 0)
 					return (NULL);
-				mpte = PHYS_TO_VM_PAGE(*ptepa & PG_FRAME);
-				mpte->ref_count++;
+				pde = pmap_pdpe_to_pde(pdpe, va);
+				if ((*pde & PG_V) != 0) {
+					if ((*pde & PG_PS) != 0)
+						return (NULL);
+					mpte = PHYS_TO_VM_PAGE(*pde & PG_FRAME);
+					mpte->ref_count++;
+				} else {
+					mpte = pmap_allocpte_alloc(pmap,
+					    ptepindex, NULL, va);
+					if (mpte == NULL)
+						return (NULL);
+				}
 			} else {
-				/*
-				 * Pass NULL instead of the PV list lock
-				 * pointer, because we don't intend to sleep.
-				 */
 				mpte = pmap_allocpte_alloc(pmap, ptepindex,
 				    NULL, va);
 				if (mpte == NULL)
-					return (mpte);
+					return (NULL);
 			}
 		}
 		pte = (pt_entry_t *)PHYS_TO_DMAP(VM_PAGE_TO_PHYS(mpte));
@@ -8986,13 +9013,8 @@ pmap_advise(pmap_t pmap, vm_offset_t sva, vm_offset_t eva, int advice)
 		pdpe = pmap_pml4e_to_pdpe(pml4e, sva);
 		if ((*pdpe & PG_V) == 0)
 			continue;
-		if ((*pdpe & PG_PS) != 0) {
-			KASSERT(va_next <= eva,
-			    ("partial update of non-transparent 1G mapping "
-			    "pdpe %#lx sva %#lx eva %#lx va_next %#lx",
-			    *pdpe, sva, eva, va_next));
+		if ((*pdpe & PG_PS) != 0)
 			continue;
-		}
 
 		va_next = (sva + NBPDR) & ~PDRMASK;
 		if (va_next < sva)
@@ -9295,11 +9317,13 @@ pmap_mapbios(vm_paddr_t pa, vm_size_t size)
 }
 
 void
-pmap_unmapdev(vm_offset_t va, vm_size_t size)
+pmap_unmapdev(void *p, vm_size_t size)
 {
 	struct pmap_preinit_mapping *ppim;
-	vm_offset_t offset;
+	vm_offset_t offset, va;
 	int i;
+
+	va = (vm_offset_t)p;
 
 	/* If we gave a direct map region in pmap_mapdev, do nothing */
 	if (va >= DMAP_MIN_ADDRESS && va < DMAP_MAX_ADDRESS)
