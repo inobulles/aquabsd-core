@@ -52,6 +52,47 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20221012: remove nls support from sort
+OLD_FILES+=usr/share/nls/hu_HU.ISO8859-2/sort.cat
+
+# 20221003: ip6protosw.h removed
+OLD_FILES+=usr/include/netinet6/ip6protosw.h
+
+# 20221001: deorbit opie
+OLD_FILES+=etc/opieaccess
+OLD_FILES+=etc/opiekeys
+OLD_FILES+=usr/bin/opieinfo
+OLD_FILES+=usr/bin/opiekey
+OLD_FILES+=usr/bin/opiepasswd
+OLD_FILES+=usr/bin/otp-md4
+OLD_FILES+=usr/bin/otp-md5
+OLD_FILES+=usr/bin/otp-sha1
+OLD_FILES+=usr/lib/libopie.a
+OLD_FILES+=usr/lib/libopie.so
+OLD_LIBS+=usr/lib/libopie.so.8
+OLD_FILES+=usr/lib/libopie_p.a
+OLD_FILES+=usr/bin/opieinfo
+OLD_FILES+=usr/lib/pam_opie.so
+OLD_LIBS+=usr/lib/pam_opie.so.6
+OLD_FILES+=usr/lib/pam_opieaccess.so
+OLD_LIBS+=usr/lib/pam_opieaccess.so.6
+OLD_FILES+=usr/share/man/man1/opieinfo.1.gz
+OLD_FILES+=usr/share/man/man1/opiekey.1.gz
+OLD_FILES+=usr/share/man/man1/opiepasswd.1.gz
+OLD_FILES+=usr/share/man/man1/otp-md4.1.gz
+OLD_FILES+=usr/share/man/man1/otp-md5.1.gz
+OLD_FILES+=usr/share/man/man1/otp-sha1.1.gz
+OLD_FILES+=usr/share/man/man4/opie.4.gz
+OLD_FILES+=usr/share/man/man5/opieaccess.5.gz
+OLD_FILES+=usr/share/man/man5/opiekeys.5.gz
+OLD_FILES+=usr/share/man/man8/pam_opie.8.gz
+OLD_FILES+=usr/share/man/man8/pam_opieaccess.8.gz
+
+# 20220928: telnetd(8) removed
+OLD_FILES+=etc/pam.d/telnetd
+OLD_FILES+=usr/libexec/telnetd
+OLD_FILES+=usr/share/man/man8/telnetd.8.gz
+
 # 20220914: domain(9) updated
 OLD_FILES+=usr/share/man/man9/domain_init.9.gz
 OLD_FILES+=usr/share/man/man9/pfctlinput.9.gz

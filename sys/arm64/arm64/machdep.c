@@ -435,7 +435,7 @@ foreach_efi_map_entry(struct efi_map_header *efihdr, efi_map_entry_cb cb)
 	 * Boot Services API.
 	 */
 	efisz = (sizeof(struct efi_map_header) + 0xf) & ~0xf;
-	map = (struct efi_md *)((uint8_t *)efihdr + efisz); 
+	map = (struct efi_md *)((uint8_t *)efihdr + efisz);
 
 	if (efihdr->descriptor_size == 0)
 		return;
@@ -768,7 +768,9 @@ initarm(struct arm64_bootparams *abp)
 	update_special_regs(0);
 
 	link_elf_ireloc(kmdp);
+#ifdef FDT
 	try_load_dtb(kmdp);
+#endif
 
 	efi_systbl_phys = MD_FETCH(kmdp, MODINFOMD_FW_HANDLE, vm_paddr_t);
 

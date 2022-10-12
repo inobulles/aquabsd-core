@@ -84,7 +84,6 @@ static char	*pw_password(struct userconf * cnf, char const * user,
     bool dryrun);
 static char	*shell_path(char const * path, char *shells[], char *sh);
 static void	rmat(uid_t uid);
-static void	rmopie(char const * name);
 
 static void
 mkdir_home_parents(int dfd, const char *dir)
@@ -707,36 +706,6 @@ rmat(uid_t uid)
 	}
 }
 
-static void
-rmopie(char const * name)
-{
-	char tmp[1014];
-	FILE *fp;
-	size_t len;
-	long atofs;
-	int fd;
-
-	if ((fd = openat(conf.rootfd, "etc/opiekeys", O_RDWR)) == -1)
-		return;
-
-	fp = fdopen(fd, "r+");
-	len = strlen(name);
-
-	for (atofs = 0; fgets(tmp, sizeof(tmp), fp) != NULL && atofs >= 0;
-	    atofs = ftell(fp)) {
-		if (strncmp(name, tmp, len) == 0 && tmp[len]==' ') {
-			/* Comment username out */
-			if (fseek(fp, atofs, SEEK_SET) == 0)
-				fwrite("#", 1, 1, fp);
-			break;
-		}
-	}
-	/*
-	 * If we got an error of any sort, don't update!
-	 */
-	fclose(fp);
-}
-
 int
 pw_user_next(int argc, char **argv, char *name __unused)
 {
@@ -754,6 +723,8 @@ pw_user_next(int argc, char **argv, char *name __unused)
 		case 'q':
 			quiet = true;
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
@@ -816,6 +787,8 @@ pw_user_show(int argc, char **argv, char *arg1)
 		case '7':
 			v7 = true;
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
@@ -897,6 +870,8 @@ pw_user_del(int argc, char **argv, char *arg1)
 		case 'Y':
 			nis = true;
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
@@ -936,10 +911,6 @@ pw_user_del(int argc, char **argv, char *arg1)
 
 	if (strcmp(pwd->pw_name, "root") == 0)
 		errx(EX_DATAERR, "cannot remove user 'root'");
-
-	/* Remove opie record from /etc/opiekeys */
-	if (PWALTDIR() != PWF_ALT)
-		rmopie(pwd->pw_name);
 
 	if (!PWALTDIR()) {
 		/* Remove crontabs */
@@ -1038,6 +1009,8 @@ pw_user_lock(int argc, char **argv, char *arg1)
 		case 'q':
 			/* compatibility */
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
@@ -1055,6 +1028,8 @@ pw_user_unlock(int argc, char **argv, char *arg1)
 		case 'q':
 			/* compatibility */
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
@@ -1322,6 +1297,8 @@ pw_user_add(int argc, char **argv, char *arg1)
 		case 'Y':
 			nis = true;
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
@@ -1630,6 +1607,8 @@ pw_user_mod(int argc, char **argv, char *arg1)
 		case 'Y':
 			nis = true;
 			break;
+		default:
+			exit(EX_USAGE);
 		}
 	}
 
