@@ -32,6 +32,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_route.h"
 #include <sys/types.h>
 #include <sys/ck.h>
+#include <sys/epoch.h>
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 #include <sys/rmlock.h>
@@ -47,7 +48,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet6/scope6_var.h>
 #include <netlink/netlink.h>
 #include <netlink/netlink_ctl.h>
-#include <netlink/netlink_var.h>
 #include <netlink/netlink_route.h>
 #include <netlink/route/route_var.h>
 
@@ -590,7 +590,7 @@ consider_resize(struct unhop_ctl *ctl, uint32_t new_size)
 }
 
 static bool __noinline
-vnet_init_unhops()
+vnet_init_unhops(void)
 {
         uint32_t num_buckets = 16;
         size_t alloc_size = CHT_SLIST_GET_RESIZE_SIZE(num_buckets);
@@ -998,7 +998,7 @@ static const struct rtnl_cmd_handler cmd_handlers[] = {
 static const struct nlhdr_parser *all_parsers[] = { &nhmsg_parser };
 
 void
-rtnl_nexthops_init()
+rtnl_nexthops_init(void)
 {
 	NL_VERIFY_PARSERS(all_parsers);
 	rtnl_register_messages(cmd_handlers, NL_ARRAY_LEN(cmd_handlers));

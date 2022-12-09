@@ -1155,6 +1155,7 @@ struct netmap_bwrap_adapter {
 	struct netmap_vp_adapter *saved_na_vp;
 	int (*nm_intr_notify)(struct netmap_kring *kring, int flags);
 };
+int nm_is_bwrap(struct netmap_adapter *na);
 int nm_bdg_polling(struct nmreq_header *hdr);
 
 int netmap_bdg_attach(struct nmreq_header *hdr, void *auth_token);
@@ -1566,6 +1567,7 @@ extern unsigned int vale_max_bridges;
 #define	netmap_get_vale_na(_1, _2, _3, _4)	0
 #define netmap_bdg_create(_1, _2)	NULL
 #define netmap_bdg_destroy(_1, _2)	0
+#define vale_max_bridges		1
 #endif /* !WITH_VALE */
 
 #ifdef WITH_PIPES
@@ -2128,7 +2130,7 @@ struct netmap_monitor_adapter {
  * native netmap support.
  */
 int generic_netmap_attach(struct ifnet *ifp);
-int generic_rx_handler(struct ifnet *ifp, struct mbuf *m);;
+int generic_rx_handler(struct ifnet *ifp, struct mbuf *m);
 
 int nm_os_catch_rx(struct netmap_generic_adapter *gna, int intercept);
 int nm_os_catch_tx(struct netmap_generic_adapter *gna, int intercept);

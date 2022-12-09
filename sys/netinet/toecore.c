@@ -239,7 +239,7 @@ toe_listen_start(struct inpcb *inp, void *arg)
 static void
 toe_listen_start_event(void *arg __unused, struct tcpcb *tp)
 {
-	struct inpcb *inp = tp->t_inpcb;
+	struct inpcb *inp = tptoinpcb(tp);
 
 	INP_WLOCK_ASSERT(inp);
 	KASSERT(tp->t_state == TCPS_LISTEN,
@@ -253,7 +253,7 @@ toe_listen_stop_event(void *arg __unused, struct tcpcb *tp)
 {
 	struct toedev *tod;
 #ifdef INVARIANTS
-	struct inpcb *inp = tp->t_inpcb;
+	struct inpcb *inp = tptoinpcb(tp);
 #endif
 
 	INP_WLOCK_ASSERT(inp);
@@ -322,7 +322,7 @@ register_toedev(struct toedev *tod)
 	registered_toedevs++;
 	mtx_unlock(&toedev_lock);
 
-	inp_apply_all(toe_listen_start, tod);
+	inp_apply_all(&V_tcbinfo, toe_listen_start, tod);
 
 	return (0);
 }

@@ -75,6 +75,9 @@ CWARNFLAGS.clang+=	-Wthread-safety
 CWARNFLAGS+=	-Wno-uninitialized
 .endif # WARNS >=2 && WARNS <= 4
 CWARNFLAGS+=	-Wno-pointer-sign
+.if !defined(NO_WDATE_TIME)
+CWARNFLAGS+=	-Wdate-time
+.endif # NO_WDATE_TIME
 # Clang has more warnings enabled by default, and when using -Wall, so if WARNS
 # is set to low values, these have to be disabled explicitly.
 .if ${WARNS} <= 6
@@ -114,11 +117,18 @@ CWARNFLAGS+=		-Wno-misleading-indentation
 .if ${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} >= 140000
 NO_WBITWISE_INSTEAD_OF_LOGICAL=	-Wno-bitwise-instead-of-logical
 .endif
+.if ${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} >= 150000
+NO_WDEPRECATED_NON_PROTOTYPE=-Wno-deprecated-non-prototype
+.endif
+.if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 100100
+NO_WZERO_LENGTH_BOUNDS=	-Wno-zero-length-bounds
+.endif
 .if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 110100
 NO_WARRAY_PARAMETER=	-Wno-array-parameter
 .endif
 .if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 120100
 NO_WUSE_AFTER_FREE=	-Wno-use-after-free
+NO_WDANGLING_POINTER=	-Wno-dangling-pointer
 .endif
 .endif # WARNS
 
@@ -211,6 +221,14 @@ CWARNFLAGS+=	-Wno-error=overflow
 .endif
 .endif
 
+# GCC 12.1.0
+.if ${COMPILER_VERSION} >= 120100
+# These warnings are raised by headers in libc++ so are disabled
+# globally for all C++
+CXXWARNFLAGS+=	-Wno-literal-suffix 			\
+		-Wno-error=unknown-pragmas
+.endif
+
 # GCC produces false positives for functions that switch on an
 # enum (GCC bug 87950)
 CWARNFLAGS+=	-Wno-return-type
@@ -222,7 +240,8 @@ CWARNFLAGS+=	-Wno-system-headers
 .endif	# gcc
 
 # How to handle FreeBSD custom printf format specifiers.
-.if ${COMPILER_TYPE} == "clang"
+.if ${COMPILER_TYPE} == "clang" || \
+    (${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 120100)
 FORMAT_EXTENSIONS=	-D__printf__=__freebsd_kprintf__
 .else
 FORMAT_EXTENSIONS=	-fformat-extensions

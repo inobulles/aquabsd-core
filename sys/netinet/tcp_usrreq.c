@@ -1476,8 +1476,8 @@ struct protosw tcp6_protosw = {
 static int
 tcp_connect(struct tcpcb *tp, struct sockaddr *nam, struct thread *td)
 {
-	struct inpcb *inp = tp->t_inpcb, *oinp;
-	struct socket *so = inp->inp_socket;
+	struct inpcb *inp = tptoinpcb(tp), *oinp;
+	struct socket *so = tptosocket(tp);
 	struct in_addr laddr;
 	u_short lport;
 	int error;
@@ -1549,7 +1549,7 @@ out:
 static int
 tcp6_connect(struct tcpcb *tp, struct sockaddr *nam, struct thread *td)
 {
-	struct inpcb *inp = tp->t_inpcb;
+	struct inpcb *inp = tptoinpcb(tp);
 	int error;
 
 	INP_WLOCK_ASSERT(inp);
@@ -1597,7 +1597,7 @@ static void
 tcp_fill_info(struct tcpcb *tp, struct tcp_info *ti)
 {
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_WLOCK_ASSERT(tptoinpcb(tp));
 	bzero(ti, sizeof(*ti));
 
 	ti->tcpi_state = tp->t_state;
@@ -1640,6 +1640,19 @@ tcp_fill_info(struct tcpcb *tp, struct tcp_info *ti)
 		tcp_offload_tcp_info(tp, ti);
 	}
 #endif
+	/*
+	 * AccECN related counters.
+	 */
+	if ((tp->t_flags2 & (TF2_ECN_PERMIT | TF2_ACE_PERMIT)) ==
+	    (TF2_ECN_PERMIT | TF2_ACE_PERMIT))
+		/*
+		 * Internal counter starts at 5 for AccECN
+		 * but 0 for RFC3168 ECN.
+		 */
+		ti->tcpi_delivered_ce = tp->t_scep - 5;
+	else
+		ti->tcpi_delivered_ce = tp->t_scep;
+	ti->tcpi_received_ce = tp->t_rcep;
 }
 
 /*
@@ -1802,7 +1815,7 @@ tcp_ctloutput_set(struct inpcb *inp, struct sockopt *sopt)
 		}
 #ifdef TCPHPTS
 		/* Assure that we are not on any hpts */
-		tcp_hpts_remove(tp->t_inpcb);
+		tcp_hpts_remove(tptoinpcb(tp));
 #endif
 		if (blk->tfb_tcp_fb_init) {
 			error = (*blk->tfb_tcp_fb_init)(tp);
@@ -2040,17 +2053,17 @@ no_mem_needed:
 		 * the old ones cleanup (if any).
 		 */
 		if (CC_ALGO(tp)->cb_destroy != NULL)
-			CC_ALGO(tp)->cb_destroy(tp->ccv);
+			CC_ALGO(tp)->cb_destroy(&tp->t_ccv);
 		/* Detach the old CC from the tcpcb  */
 		cc_detach(tp);
 		/* Copy in our temp memory that was inited */
-		memcpy(tp->ccv, &cc_mem, sizeof(struct cc_var));
+		memcpy(&tp->t_ccv, &cc_mem, sizeof(struct cc_var));
 		/* Now attach the new, which takes a reference */
 		cc_attach(tp, algo);
 		/* Ok now are we where we have gotten past any conn_init? */
 		if (TCPS_HAVEESTABLISHED(tp->t_state) && (CC_ALGO(tp)->conn_init != NULL)) {
 			/* Yep run the connection init for the new CC */
-			CC_ALGO(tp)->conn_init(tp->ccv);
+			CC_ALGO(tp)->conn_init(&tp->t_ccv);
 		}
 	} else if (ptr)
 		free(ptr, M_CC_MEM);
@@ -2121,7 +2134,7 @@ tcp_default_ctloutput(struct inpcb *inp, struct sockopt *sopt)
 		}
 		INP_WLOCK_RECHECK_CLEANUP(inp, free(pbuf, M_TEMP));
 		if (CC_ALGO(tp)->ctl_output != NULL)
-			error = CC_ALGO(tp)->ctl_output(tp->ccv, sopt, pbuf);
+			error = CC_ALGO(tp)->ctl_output(&tp->t_ccv, sopt, pbuf);
 		else
 			error = ENOENT;
 		INP_WUNLOCK(inp);
@@ -2713,8 +2726,8 @@ unhold:
 static void
 tcp_disconnect(struct tcpcb *tp)
 {
-	struct inpcb *inp = tp->t_inpcb;
-	struct socket *so = inp->inp_socket;
+	struct inpcb *inp = tptoinpcb(tp);
+	struct socket *so = tptosocket(tp);
 
 	NET_EPOCH_ASSERT();
 	INP_WLOCK_ASSERT(inp);
@@ -2757,7 +2770,7 @@ tcp_usrclosed(struct tcpcb *tp)
 {
 
 	NET_EPOCH_ASSERT();
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_WLOCK_ASSERT(tptoinpcb(tp));
 
 	switch (tp->t_state) {
 	case TCPS_LISTEN:
@@ -2792,7 +2805,7 @@ tcp_usrclosed(struct tcpcb *tp)
 	if (tp->t_acktime == 0)
 		tp->t_acktime = ticks;
 	if (tp->t_state >= TCPS_FIN_WAIT_2) {
-		soisdisconnected(tp->t_inpcb->inp_socket);
+		soisdisconnected(tptosocket(tp));
 		/* Prevent the connection hanging in FIN_WAIT_2 forever. */
 		if (tp->t_state == TCPS_FIN_WAIT_2) {
 			int timeout;
@@ -3059,12 +3072,8 @@ db_print_tcpcb(struct tcpcb *tp, const char *name, int indent)
 	   TAILQ_FIRST(&tp->t_segq), tp->t_segqlen, tp->t_dupacks);
 
 	db_print_indent(indent);
-	db_printf("tt_rexmt: %p   tt_persist: %p   tt_keep: %p\n",
-	    &tp->t_timers->tt_rexmt, &tp->t_timers->tt_persist, &tp->t_timers->tt_keep);
-
-	db_print_indent(indent);
-	db_printf("tt_2msl: %p   tt_delack: %p   t_inpcb: %p\n", &tp->t_timers->tt_2msl,
-	    &tp->t_timers->tt_delack, tp->t_inpcb);
+	db_printf("t_callout: %p   t_timers: %p\n",
+	    &tp->t_callout, &tp->t_timers);
 
 	db_print_indent(indent);
 	db_printf("t_state: %d (", tp->t_state);
@@ -3118,9 +3127,8 @@ db_print_tcpcb(struct tcpcb *tp, const char *name, int indent)
 	    tp->t_rxtcur, tp->t_maxseg, tp->t_srtt);
 
 	db_print_indent(indent);
-	db_printf("t_rttvar: %d   t_rxtshift: %d   t_rttmin: %u   "
-	    "t_rttbest: %u\n", tp->t_rttvar, tp->t_rxtshift, tp->t_rttmin,
-	    tp->t_rttbest);
+	db_printf("t_rttvar: %d   t_rxtshift: %d   t_rttmin: %u\n",
+	    tp->t_rttvar, tp->t_rxtshift, tp->t_rttmin);
 
 	db_print_indent(indent);
 	db_printf("t_rttupdated: %lu   max_sndwnd: %u   t_softerror: %d\n",

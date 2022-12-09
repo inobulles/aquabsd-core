@@ -5,10 +5,10 @@ LOADER_CD9660_SUPPORT?=	yes
 LOADER_MSDOS_SUPPORT?=	no
 LOADER_EXT2FS_SUPPORT?=	yes
 LOADER_UFS_SUPPORT?=	yes
-LOADER_NET_SUPPORT?=	yes
-LOADER_NFS_SUPPORT?=	yes
+LOADER_NET_SUPPORT?=	no
+LOADER_NFS_SUPPORT?=	no
 LOADER_TFTP_SUPPORT?=	no
-LOADER_GZIP_SUPPORT?=	yes
+LOADER_GZIP_SUPPORT?=	no
 LOADER_BZIP2_SUPPORT?=	no
 
 .include <bsd.init.mk>
@@ -25,11 +25,13 @@ SRCS=	\
 		host_syscalls.c \
 		hostcons.c \
 		hostdisk.c \
+		hostfs.c \
 		init.c \
 		kbootfdt.c \
 		main.c \
 		termios.c \
-		vers.c \
+		util.c \
+		vers.c
 
 CFLAGS.gfx_fb_stub.c += -I${SRCTOP}/contrib/pnglite -I${SRCTOP}/sys/teken
 

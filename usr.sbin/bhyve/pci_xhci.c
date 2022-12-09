@@ -568,6 +568,10 @@ pci_xhci_portregs_write(struct pci_xhci_softc *sc, uint64_t offset,
 		 */
 		p->porthlpmc = value;
 		break;
+	default:
+		DPRINTF(("pci_xhci: unaligned portreg write offset %#lx",
+		    offset));
+		break;
 	}
 }
 
@@ -650,8 +654,7 @@ pci_xhci_init_ep(struct pci_xhci_dev_emu *dev, int epid)
 	struct xhci_dev_ctx    *dev_ctx;
 	struct pci_xhci_dev_ep *devep;
 	struct xhci_endp_ctx   *ep_ctx;
-	uint32_t	pstreams;
-	int		i;
+	uint32_t	i, pstreams;
 
 	dev_ctx = dev->dev_ctx;
 	ep_ctx = &dev_ctx->ctx_ep[epid];
@@ -1184,8 +1187,7 @@ done:
 
 static uint32_t
 pci_xhci_find_stream(struct pci_xhci_softc *sc, struct xhci_endp_ctx *ep,
-    struct pci_xhci_dev_ep *devep, uint32_t streamid,
-    struct xhci_stream_ctx **osctx)
+    struct pci_xhci_dev_ep *devep, uint32_t streamid)
 {
 	struct xhci_stream_ctx *sctx;
 
@@ -1204,11 +1206,10 @@ pci_xhci_find_stream(struct pci_xhci_softc *sc, struct xhci_endp_ctx *ep,
 	if (streamid > devep->ep_MaxPStreams)
 		return (XHCI_TRB_ERROR_STREAM_TYPE);
 
-	sctx = XHCI_GADDR(sc, ep->qwEpCtx2 & ~0xFUL) + streamid;
+	sctx = (struct xhci_stream_ctx *)XHCI_GADDR(sc, ep->qwEpCtx2 & ~0xFUL) +
+	    streamid;
 	if (!XHCI_SCTX_0_SCT_GET(sctx->qwSctx0))
 		return (XHCI_TRB_ERROR_STREAM_TYPE);
-
-	*osctx = sctx;
 
 	return (XHCI_TRB_ERROR_SUCCESS);
 }
@@ -1264,12 +1265,8 @@ pci_xhci_cmd_set_tr(struct pci_xhci_softc *sc, uint32_t slot,
 
 	streamid = XHCI_TRB_2_STREAM_GET(trb->dwTrb2);
 	if (devep->ep_MaxPStreams > 0) {
-		struct xhci_stream_ctx *sctx;
-
-		sctx = NULL;
-		cmderr = pci_xhci_find_stream(sc, ep_ctx, devep, streamid,
-		    &sctx);
-		if (sctx != NULL) {
+		cmderr = pci_xhci_find_stream(sc, ep_ctx, devep, streamid);
+		if (cmderr == XHCI_TRB_ERROR_SUCCESS) {
 			assert(devep->ep_sctx != NULL);
 
 			devep->ep_sctx[streamid].qwSctx0 = trb->qwTrb0;
@@ -1732,7 +1729,7 @@ pci_xhci_handle_transfer(struct pci_xhci_softc *sc,
 	DPRINTF(("pci_xhci handle_transfer slot %u", slot));
 
 retry:
-	err = 0;
+	err = XHCI_TRB_ERROR_INVALID;
 	do_retry = 0;
 	do_intr = 0;
 	setup_trb = NULL;
@@ -1856,24 +1853,26 @@ retry:
 		goto errout;
 
 	if (epid == 1) {
-		err = USB_ERR_NOT_STARTED;
+		int usberr;
+
 		if (dev->dev_ue->ue_request != NULL)
-			err = dev->dev_ue->ue_request(dev->dev_sc, xfer);
-		setup_trb = NULL;
+			usberr = dev->dev_ue->ue_request(dev->dev_sc, xfer);
+		else
+			usberr = USB_ERR_NOT_STARTED;
+		err = USB_TO_XHCI_ERR(usberr);
+		if (err == XHCI_TRB_ERROR_SUCCESS ||
+		    err == XHCI_TRB_ERROR_STALL ||
+		    err == XHCI_TRB_ERROR_SHORT_PKT) {
+			err = pci_xhci_xfer_complete(sc, xfer, slot, epid,
+			    &do_intr);
+			if (err != XHCI_TRB_ERROR_SUCCESS)
+				do_retry = 0;
+		}
+
 	} else {
 		/* handle data transfer */
 		pci_xhci_try_usb_xfer(sc, dev, devep, ep_ctx, slot, epid);
 		err = XHCI_TRB_ERROR_SUCCESS;
-		goto errout;
-	}
-
-	err = USB_TO_XHCI_ERR(err);
-	if ((err == XHCI_TRB_ERROR_SUCCESS) ||
-	    (err == XHCI_TRB_ERROR_STALL) ||
-	    (err == XHCI_TRB_ERROR_SHORT_PKT)) {
-		err = pci_xhci_xfer_complete(sc, xfer, slot, epid, &do_intr);
-		if (err != XHCI_TRB_ERROR_SUCCESS)
-			do_retry = 0;
 	}
 
 errout:
@@ -1911,6 +1910,7 @@ pci_xhci_device_doorbell(struct pci_xhci_softc *sc, uint32_t slot,
 	struct xhci_trb	*trb;
 	uint64_t	ringaddr;
 	uint32_t	ccs;
+	int		error;
 
 	DPRINTF(("pci_xhci doorbell slot %u epid %u stream %u",
 	    slot, epid, streamid));
@@ -1950,8 +1950,6 @@ pci_xhci_device_doorbell(struct pci_xhci_softc *sc, uint32_t slot,
 
 	/* get next trb work item */
 	if (devep->ep_MaxPStreams != 0) {
-		struct xhci_stream_ctx *sctx;
-
 		/*
 		 * Stream IDs of 0, 65535 (any stream), and 65534
 		 * (prime) are invalid.
@@ -1961,10 +1959,10 @@ pci_xhci_device_doorbell(struct pci_xhci_softc *sc, uint32_t slot,
 			return;
 		}
 
-		sctx = NULL;
-		pci_xhci_find_stream(sc, ep_ctx, devep, streamid, &sctx);
-		if (sctx == NULL) {
-			DPRINTF(("pci_xhci: invalid stream %u", streamid));
+		error = pci_xhci_find_stream(sc, ep_ctx, devep, streamid);
+		if (error != XHCI_TRB_ERROR_SUCCESS) {
+			DPRINTF(("pci_xhci: invalid stream %u: %d",
+			    streamid, error));
 			return;
 		}
 		sctx_tr = &devep->ep_sctx_trbs[streamid];
@@ -2107,7 +2105,7 @@ pci_xhci_rtsregs_write(struct pci_xhci_softc *sc, uint64_t offset,
 
 		if (rts->er_events_cnt > 0) {
 			uint64_t erdp;
-			uint32_t erdp_i;
+			int erdp_i;
 
 			erdp = rts->intrreg.erdp & ~0xF;
 			erdp_i = (erdp - rts->erstba_p->qwEvrsTablePtr) /
@@ -2136,13 +2134,15 @@ pci_xhci_rtsregs_write(struct pci_xhci_softc *sc, uint64_t offset,
 static uint64_t
 pci_xhci_portregs_read(struct pci_xhci_softc *sc, uint64_t offset)
 {
+	struct pci_xhci_portregs *portregs;
 	int port;
-	uint32_t *p;
+	uint32_t reg;
 
 	if (sc->portregs == NULL)
 		return (0);
 
-	port = (offset - 0x3F0) / 0x10;
+	port = (offset - XHCI_PORTREGS_PORT0) / XHCI_PORTREGS_SETSZ;
+	offset = (offset - XHCI_PORTREGS_PORT0) % XHCI_PORTREGS_SETSZ;
 
 	if (port > XHCI_MAX_DEVS) {
 		DPRINTF(("pci_xhci: portregs_read port %d >= XHCI_MAX_DEVS",
@@ -2152,15 +2152,31 @@ pci_xhci_portregs_read(struct pci_xhci_softc *sc, uint64_t offset)
 		return (XHCI_PS_SPEED_SET(3));
 	}
 
-	offset = (offset - 0x3F0) % 0x10;
-
-	p = &sc->portregs[port].portsc;
-	p += offset / sizeof(uint32_t);
+	portregs = XHCI_PORTREG_PTR(sc, port);
+	switch (offset) {
+	case 0:
+		reg = portregs->portsc;
+		break;
+	case 4:
+		reg = portregs->portpmsc;
+		break;
+	case 8:
+		reg = portregs->portli;
+		break;
+	case 12:
+		reg = portregs->porthlpmc;
+		break;
+	default:
+		DPRINTF(("pci_xhci: unaligned portregs read offset %#lx",
+		    offset));
+		reg = 0xffffffff;
+		break;
+	}
 
 	DPRINTF(("pci_xhci: portregs read offset 0x%lx port %u -> 0x%x",
-	        offset, port, *p));
+	        offset, port, reg));
 
-	return (*p);
+	return (reg);
 }
 
 static void

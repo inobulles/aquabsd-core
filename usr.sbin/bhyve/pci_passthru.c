@@ -183,7 +183,7 @@ write_config(const struct pcisel *sel, long reg, int width, uint32_t data)
 static int
 passthru_add_msicap(struct pci_devinst *pi, int msgnum, int nextptr)
 {
-	int capoff, i;
+	int capoff;
 	struct msicap msicap;
 	u_char *capdata;
 
@@ -197,7 +197,7 @@ passthru_add_msicap(struct pci_devinst *pi, int msgnum, int nextptr)
 	 */
 	capoff = 256 - roundup(sizeof(msicap), 4);
 	capdata = (u_char *)&msicap;
-	for (i = 0; i < sizeof(msicap); i++)
+	for (size_t i = 0; i < sizeof(msicap); i++)
 		pci_set_cfgdata8(pi, capoff + i, capdata[i]);
 
 	return (capoff);
@@ -212,7 +212,7 @@ cfginitmsi(struct passthru_softc *sc)
 	struct pcisel sel;
 	struct pci_devinst *pi;
 	struct msixcap msixcap;
-	uint32_t *msixcap_ptr;
+	char *msixcap_ptr;
 
 	pi = sc->psc_pi;
 	sel = sc->psc_sel;
@@ -249,15 +249,15 @@ cfginitmsi(struct passthru_softc *sc)
 				 */
 				sc->psc_msix.capoff = ptr;
 				caplen = 12;
-				msixcap_ptr = (uint32_t*) &msixcap;
+				msixcap_ptr = (char *)&msixcap;
 				capptr = ptr;
 				while (caplen > 0) {
 					u32 = read_config(&sel, capptr, 4);
-					*msixcap_ptr = u32;
+					memcpy(msixcap_ptr, &u32, 4);
 					pci_set_cfgdata32(pi, capptr, u32);
 					caplen -= 4;
 					capptr += 4;
-					msixcap_ptr++;
+					msixcap_ptr += 4;
 				}
 			}
 			ptr = read_config(&sel, ptr + PCICAP_NEXTPTR, 1);
@@ -438,7 +438,7 @@ msix_table_write(struct vmctx *ctx, int vcpu, struct passthru_softc *sc,
 	assert(entry_offset % 4 == 0);
 
 	vector_control = entry->vector_control;
-	dest32 = (uint32_t *)((void *)entry + entry_offset);
+	dest32 = (uint32_t *)((uint8_t *)entry + entry_offset);
 	*dest32 = data;
 	/* If MSI-X hasn't been enabled, do nothing */
 	if (pi->pi_msix.enabled) {

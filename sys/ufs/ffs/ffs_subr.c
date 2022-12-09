@@ -407,7 +407,7 @@ validate_sblock(struct fs *fs, int flags)
 		FCHK(powerof2(fs->fs_fsize), ==, 0, %jd);
 		FCHK(fs->fs_sbsize, >, SBLOCKSIZE, %jd);
 		FCHK(fs->fs_sbsize, <, (signed)sizeof(struct fs), %jd);
-		FCHK(fs->fs_sbsize % dbtob(1), !=, 0, %jd);
+		FCHK(fs->fs_sbsize % sectorsize, !=, 0, %jd);
 		FCHK(fs->fs_fpg, <, 3 * fs->fs_frag, %jd);
 		FCHK(fs->fs_ncg, <, 1, %jd);
 		FCHK(fs->fs_fsbtodb, !=, ILOG2(fs->fs_fsize / sectorsize), %jd);
@@ -473,13 +473,15 @@ validate_sblock(struct fs *fs, int flags)
 	FCHK(fs->fs_fpg, <, 3 * fs->fs_frag, %jd);
 	FCHK(fs->fs_ncg, <, 1, %jd);
 	FCHK(fs->fs_ipg, <, fs->fs_inopb, %jd);
-	FCHK(fs->fs_ipg * fs->fs_ncg, >, (((int64_t)(1)) << 32) - INOPB(fs),
-	    %jd);
+	FCHK((u_int64_t)fs->fs_ipg * fs->fs_ncg, >,
+	    (((int64_t)(1)) << 32) - INOPB(fs), %jd);
 	FCHK(fs->fs_cstotal.cs_nifree, <, 0, %jd);
-	FCHK(fs->fs_cstotal.cs_nifree, >, fs->fs_ipg * fs->fs_ncg, %jd);
+	FCHK(fs->fs_cstotal.cs_nifree, >, (u_int64_t)fs->fs_ipg * fs->fs_ncg,
+	    %jd);
 	FCHK(fs->fs_cstotal.cs_ndir, <, 0, %jd);
 	FCHK(fs->fs_cstotal.cs_ndir, >,
-	    (fs->fs_ipg * fs->fs_ncg) - fs->fs_cstotal.cs_nifree, %jd);
+	    ((u_int64_t)fs->fs_ipg * fs->fs_ncg) - fs->fs_cstotal.cs_nifree,
+	    %jd);
 	FCHK(fs->fs_sbsize, >, SBLOCKSIZE, %jd);
 	FCHK(fs->fs_sbsize, <, (signed)sizeof(struct fs), %jd);
 	FCHK(fs->fs_maxbsize, <, fs->fs_bsize, %jd);
@@ -503,7 +505,7 @@ validate_sblock(struct fs *fs, int flags)
 	 */
 	if (error)
 		return (error);
-	FCHK(fs->fs_sbsize % dbtob(1), !=, 0, %jd);
+	FCHK(fs->fs_sbsize % sectorsize, !=, 0, %jd);
 	FCHK(fs->fs_ipg % fs->fs_inopb, !=, 0, %jd);
 	FCHK(fs->fs_sblkno, !=, roundup(
 	    howmany(fs->fs_sblockloc + SBLOCKSIZE, fs->fs_fsize),
@@ -546,8 +548,8 @@ validate_sblock(struct fs *fs, int flags)
 	 * and ends in the data area of the same cylinder group.
 	 */
 	FCHK(fs->fs_size, <, 8 * fs->fs_frag, %jd);
-	FCHK(fs->fs_size, <=, (fs->fs_ncg - 1) * fs->fs_fpg, %jd);
-	FCHK(fs->fs_size, >, fs->fs_ncg * fs->fs_fpg, %jd);
+	FCHK(fs->fs_size, <=, ((int64_t)fs->fs_ncg - 1) * fs->fs_fpg, %jd);
+	FCHK(fs->fs_size, >, (int64_t)fs->fs_ncg * fs->fs_fpg, %jd);
 	/*
 	 * If we are not requested to read in the csum data stop here
 	 * as the correctness of the remaining values is only important

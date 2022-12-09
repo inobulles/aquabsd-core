@@ -157,7 +157,6 @@ struct pargs {
  *	k*- only accessed by curthread and from an interrupt
  *	kx- only accessed by curthread and by debugger
  *      l - the attaching proc or attaching proc parent
- *      m - Giant
  *      n - not locked, lazy
  *      o - ktrace lock
  *      q - td_contested lock
@@ -169,7 +168,6 @@ struct pargs {
  *      x - created at fork, only changes during single threading in exec
  *      y - created at first aio, doesn't change until exit or exec at which
  *          point we are single-threaded and only curthread changes it
- *      z - zombie threads lock
  *
  * If the locking key specifies two identifiers (for example, p_pptr) then
  * either lock is sufficient for read access, but both locks must be held
@@ -559,7 +557,7 @@ enum {
 #define	TDP_RESETSPUR	0x04000000 /* Reset spurious page fault history. */
 #define	TDP_NERRNO	0x08000000 /* Last errno is already in td_errno */
 #define	TDP_UIOHELD	0x10000000 /* Current uio has pages held in td_ma */
-#define	TDP_UNUSED0	0x20000000 /* UNUSED */
+#define	TDP_INTCPCALLOUT 0x20000000 /* used by netinet/tcp_timer.c */
 #define	TDP_EXECVMSPC	0x40000000 /* Execve destroyed old vmspace */
 #define	TDP_SIGFASTPENDING 0x80000000 /* Pending signal due to sigfastblock */
 

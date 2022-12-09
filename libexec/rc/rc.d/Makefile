@@ -216,7 +216,8 @@ CONFS+=	ipfilter \
 .endif
 
 .if ${MK_IPFW} != "no"
-CONFS+=		ipfw
+CONFS+=		ipfw \
+		dnctl
 .if ${MK_NETGRAPH} != "no"
 CONFS+=		ipfw_netflow
 .endif
@@ -253,10 +254,6 @@ _kpasswdd=	kpasswdd
 DIRS+=	VAR_HEMIDAL
 VAR_HEMIDAL=	/var/heimdal
 VAR_HEMIDAL_MODE=	700
-.endif
-
-.if ${MK_MAIL} != "no"
-CONFS+=		othermta
 .endif
 
 .if ${MK_NS_CACHING} != "no"
@@ -328,6 +325,7 @@ ZFS+=		zfsd
 ZFS+=		zfskeys
 ZFS+=		zpool
 ZFS+=		zpoolreguid
+ZFS+=		zpoolupgrade
 ZFS+=		zvol
 ZFSPACKAGE=	rc
 .endif

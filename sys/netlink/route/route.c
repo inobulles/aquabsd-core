@@ -271,13 +271,8 @@ dump_px(uint32_t fibnum, const struct nlmsghdr *hdr,
 	if (fibnum < 255)
 		rtm->rtm_table = (unsigned char)fibnum;
 	rtm->rtm_scope = RT_SCOPE_UNIVERSE;
-	if (!NH_IS_NHGRP(rnd->rnd_nhop)) {
-		rtm->rtm_protocol = nl_get_rtm_protocol(rnd->rnd_nhop);
-		rtm->rtm_type = get_rtm_type(rnd->rnd_nhop);
-	} else {
-		rtm->rtm_protocol = RTPROT_UNSPEC; /* TODO: protocol from nhg? */
-		rtm->rtm_type = RTN_UNICAST;
-	}
+	rtm->rtm_protocol = nl_get_rtm_protocol(rnd->rnd_nhop);
+	rtm->rtm_type = get_rtm_type(rnd->rnd_nhop);
 
 	nlattr_add_u32(nw, NL_RTA_TABLE, fibnum);
 
@@ -445,6 +440,7 @@ struct nl_parsed_route {
 	uint32_t		rtax_mtu;
 	uint8_t			rtm_family;
 	uint8_t			rtm_dst_len;
+	uint8_t			rtm_protocol;
 };
 
 #define	_IN(_field)	offsetof(struct rtmsg, _field)
@@ -469,6 +465,7 @@ static const struct nlattr_parser nla_p_rtmsg[] = {
 static const struct nlfield_parser nlf_p_rtmsg[] = {
 	{.off_in = _IN(rtm_family), .off_out = _OUT(rtm_family), .cb = nlf_get_u8 },
 	{.off_in = _IN(rtm_dst_len), .off_out = _OUT(rtm_dst_len), .cb = nlf_get_u8 },
+	{.off_in = _IN(rtm_protocol), .off_out = _OUT(rtm_protocol), .cb = nlf_get_u8 },
 };
 #undef _IN
 #undef _OUT
@@ -736,6 +733,8 @@ create_nexthop_one(struct nl_parsed_route *attrs, struct rta_mpath_nh *mpnh,
 	if (mpnh->ifp != NULL)
 		nhop_set_transmit_ifp(nh, mpnh->ifp);
 	nhop_set_rtflags(nh, attrs->rta_rtflags);
+	if (attrs->rtm_protocol > RTPROT_STATIC)
+		nhop_set_origin(nh, attrs->rtm_protocol);
 
 	*pnh = finalize_nhop(nh, &error);
 
@@ -769,12 +768,20 @@ create_nexthop_from_attrs(struct nl_parsed_route *attrs,
 		}
 		if (error == 0) {
 			struct rib_head *rh = nhop_get_rh(wn[0].nh);
+			struct nhgrp_object *nhg;
 
-			error = nhgrp_get_group(rh, wn, num_nhops, 0,
-			    (struct nhgrp_object **)&nh);
-
+			nhg = nhgrp_alloc(rh->rib_fibnum, rh->rib_family,
+			    wn, num_nhops, perror);
+			if (nhg != NULL) {
+				if (attrs->rtm_protocol > RTPROT_STATIC)
+					nhgrp_set_origin(nhg, attrs->rtm_protocol);
+				nhg = nhgrp_get_nhgrp(nhg, perror);
+			}
 			for (int i = 0; i < num_nhops; i++)
 				nhop_free(wn[i].nh);
+			if (nhg != NULL)
+				return ((struct nhop_object *)nhg);
+			error = *perror;
 		}
 #else
 		error = ENOTSUP;
@@ -799,6 +806,8 @@ create_nexthop_from_attrs(struct nl_parsed_route *attrs,
 		if (attrs->rta_rtflags & RTF_REJECT)
 			nhop_set_blackhole(nh, NHF_REJECT);
 		nhop_set_rtflags(nh, attrs->rta_rtflags);
+		if (attrs->rtm_protocol > RTPROT_STATIC)
+			nhop_set_origin(nh, attrs->rtm_protocol);
 		nh = finalize_nhop(nh, perror);
 	}
 
@@ -981,7 +990,7 @@ static const struct rtnl_cmd_handler cmd_handlers[] = {
 static const struct nlhdr_parser *all_parsers[] = {&mpath_parser, &metrics_parser, &rtm_parser};
 
 void
-rtnl_routes_init()
+rtnl_routes_init(void)
 {
 	NL_VERIFY_PARSERS(all_parsers);
 	rtnl_register_messages(cmd_handlers, NL_ARRAY_LEN(cmd_handlers));

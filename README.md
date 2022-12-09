@@ -9,7 +9,7 @@ Currently, aquaBSD core only supports the x86_64 CPU architecture (`amd64`).
 
 ## Building
 
-It's recommended, to make things easier, to create a FreeBSD jail or chroot (technically you could also use an aquaBSD jail, but that would require a bit more setting up - in the future though, there will be special builds of aquaBSD specifically for CI) in which to install the aquaBSD core source.
+It's recommended, to make things easier, to create a FreeBSD jail or chroot (technically you could also use an aquaBSD aquarium, but that would require a bit more setting up - in the future though, there will be special builds of aquaBSD specifically for CI) in which to install the aquaBSD core source.
 You can watch [this video](https://youtu.be/T6gYmjtry50) or read [this article in the handbook](https://docs.freebsd.org/en/books/handbook/jails/) on jail creation if you don't know where to get started.
 The jail you create just needs to have a C/C++ compilation toolchain ready, nothing more.
 
