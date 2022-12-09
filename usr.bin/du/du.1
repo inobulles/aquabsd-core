@@ -28,7 +28,7 @@
 .\"	@(#)du.1	8.2 (Berkeley) 4/1/94
 .\" $FreeBSD$
 .\"
-.Dd October 25, 2021
+.Dd December 9, 2022
 .Dt DU 1
 .Os
 .Sh NAME
@@ -58,6 +58,13 @@ The options are as follows:
 .It Fl A
 Display the apparent size instead of the disk usage.
 This can be helpful when operating on compressed volumes or sparse files.
+Also count directories as having size 0. This behaviour is different to the
+.Fl A
+option in
+.Fx
+or the
+.Fl Fl apparent-size
+option in GNU coreutils.
 .It Fl B Ar blocksize
 Calculate block counts in
 .Ar blocksize
@@ -90,18 +97,18 @@ No symbolic links are followed.
 This is the default.
 .It Fl a
 Display an entry for each file in a file hierarchy.
-.It Fl c
-Display a grand total.
-.It Fl d Ar depth
-Display an entry for all files and directories
-.Ar depth
-directories deep.
 .It Fl b
 Display block counts in single-byte blocks,
 by counting file sizes per-byte instead of counting per-block.
 When the
 .Fl b
 option is specified, the apparent size is always shown.
+.It Fl c
+Display a grand total.
+.It Fl d Ar depth
+Display an entry for all files and directories
+.Ar depth
+directories deep.
 .It Fl g
 Display block counts in 1073741824-byte (1 GiB) blocks.
 .It Fl h
