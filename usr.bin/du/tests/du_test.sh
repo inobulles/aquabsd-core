@@ -120,6 +120,9 @@ b_flag_body()
 	atf_check truncate -s 69420 B
 	atf_check truncate -s 1t C
 	atf_check -o inline:'1337\tA\n69420\tB\n1099511627776\tC\n1099511698533\ttotal\n' du -abc A B C
+	atf_check mkdir directory
+	atf_check truncate -s69 directory/file
+	atf_check -o inline:'69\tdirectory\n' du -b directory
 }
 
 atf_test_case g_flag

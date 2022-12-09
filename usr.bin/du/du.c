@@ -282,14 +282,11 @@ main(int argc, char *argv[])
 			if (ignorep(p))
 				break;
 
-			curbytes = Aflag ?
-				p->fts_statp->st_size :
-				p->fts_statp->st_blocks;
-
-			curblocks = howmany(curbytes, cblocksize);
+			curblocks = Aflag ? 0 :
+				howmany(p->fts_statp->st_blocks, cblocksize);
 
 			p->fts_parent->fts_bignum += p->fts_bignum +=
-			    bflag ? curbytes : curblocks;
+				curblocks;
 
 			if (p->fts_level <= depth && threshold <=
 			    threshold_sign * howmany(p->fts_bignum *
