@@ -149,7 +149,7 @@ vcpu_lock_all(struct vmmdev_softc *sc)
 {
 	struct vcpu *vcpu;
 	int error;
-	uint16_t i, maxcpus;
+	uint16_t i, j, maxcpus;
 
 	vm_slock_vcpus(sc->vm);
 	maxcpus = vm_get_maxcpus(sc->vm);
@@ -163,11 +163,11 @@ vcpu_lock_all(struct vmmdev_softc *sc)
 	}
 
 	if (error) {
-		while (--i >= 0) {
-			vcpu = vm_vcpu(sc->vm, i);
+		for (j = 0; j < i; j++) {
+			vcpu = vm_vcpu(sc->vm, j);
 			if (vcpu == NULL)
 				continue;
-			vcpu_unlock_one(sc, i, vcpu);
+			vcpu_unlock_one(sc, j, vcpu);
 		}
 		vm_unlock_vcpus(sc->vm);
 	}
@@ -451,8 +451,6 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	case VM_INJECT_EXCEPTION:
 	case VM_GET_CAPABILITY:
 	case VM_SET_CAPABILITY:
-	case VM_PPTDEV_MSI:
-	case VM_PPTDEV_MSIX:
 	case VM_SET_X2APIC_STATE:
 	case VM_GLA2GPA:
 	case VM_GLA2GPA_NOFAULT:
@@ -460,6 +458,8 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	case VM_SET_INTINFO:
 	case VM_GET_INTINFO:
 	case VM_RESTART_INSTRUCTION:
+	case VM_GET_KERNEMU_DEV:
+	case VM_SET_KERNEMU_DEV:
 		/*
 		 * ioctls that can operate only on vcpus that are not running.
 		 */
