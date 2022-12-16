@@ -30,7 +30,6 @@ __FBSDID("$FreeBSD$");
 #include "opt_inet.h"
 #include "opt_inet6.h"
 #include "opt_ipsec.h"
-#include "opt_tcpdebug.h"
 #include "opt_ratelimit.h"
 #include "opt_kern_tls.h"
 #include <sys/param.h>
@@ -105,9 +104,6 @@ __FBSDID("$FreeBSD$");
 #ifdef NETFLIX_SHARED_CWND
 #include <netinet/tcp_shared_cwnd.h>
 #endif
-#ifdef TCPDEBUG
-#include <netinet/tcp_debug.h>
-#endif				/* TCPDEBUG */
 #ifdef TCP_OFFLOAD
 #include <netinet/tcp_offload.h>
 #endif
@@ -490,7 +486,6 @@ static int rack_set_sockopt(struct inpcb *inp, struct sockopt *sopt);
 static void rack_set_state(struct tcpcb *tp, struct tcp_rack *rack);
 static int32_t rack_stopall(struct tcpcb *tp);
 static void rack_timer_cancel(struct tcpcb *tp, struct tcp_rack *rack, uint32_t cts, int line);
-static void rack_timer_stop(struct tcpcb *tp, uint32_t timer_type);
 static uint32_t
 rack_update_entry(struct tcpcb *tp, struct tcp_rack *rack,
     struct rack_sendmap *rsm, uint64_t ts, int32_t * lenp, uint16_t add_flag);
@@ -571,16 +566,13 @@ rack_trace_point(struct tcp_rack *rack, int num)
 }
 
 static void
-rack_set_cc_pacing(struct tcp_rack *rack)
+rack_swap_beta_values(struct tcp_rack *rack, uint8_t flex8)
 {
 	struct sockopt sopt;
 	struct cc_newreno_opts opt;
-	struct newreno old, *ptr;
+	struct newreno old;
 	struct tcpcb *tp;
-	int error;
-
-	if (rack->rc_pacing_cc_set)
-		return;
+	int error, failed = 0;
 
 	tp = rack->rc_tp;
 	if (tp->t_cc == NULL) {
@@ -590,108 +582,56 @@ rack_set_cc_pacing(struct tcp_rack *rack)
 	rack->rc_pacing_cc_set = 1;
 	if (strcmp(tp->t_cc->name, CCALGONAME_NEWRENO) != 0) {
 		/* Not new-reno we can't play games with beta! */
+		failed = 1;
 		goto out;
+
 	}
-	ptr = ((struct newreno *)tp->t_ccv.cc_data);
 	if (CC_ALGO(tp)->ctl_output == NULL)  {
-		/* Huh, why does new_reno no longer have a set function? */
+		/* Huh, not using new-reno so no swaps.? */
+		failed = 2;
 		goto out;
 	}
-	if (ptr == NULL) {
-		/* Just the default values */
-		old.beta = V_newreno_beta_ecn;
-		old.beta_ecn = V_newreno_beta_ecn;
-		old.newreno_flags = 0;
-	} else {
-		old.beta = ptr->beta;
-		old.beta_ecn = ptr->beta_ecn;
-		old.newreno_flags = ptr->newreno_flags;
-	}
+	/* Get the current values out */
 	sopt.sopt_valsize = sizeof(struct cc_newreno_opts);
+	sopt.sopt_dir = SOPT_GET;
+	opt.name = CC_NEWRENO_BETA;
+	error = CC_ALGO(tp)->ctl_output(&tp->t_ccv, &sopt, &opt);
+	if (error)  {
+		failed = 3;
+		goto out;
+	}
+	old.beta = opt.val;
+	opt.name = CC_NEWRENO_BETA_ECN;
+	error = CC_ALGO(tp)->ctl_output(&tp->t_ccv, &sopt, &opt);
+	if (error)  {
+		failed = 4;
+		goto out;
+	}
+	old.beta_ecn = opt.val;
+
+	/* Now lets set in the values we have stored */
 	sopt.sopt_dir = SOPT_SET;
 	opt.name = CC_NEWRENO_BETA;
 	opt.val = rack->r_ctl.rc_saved_beta.beta;
 	error = CC_ALGO(tp)->ctl_output(&tp->t_ccv, &sopt, &opt);
 	if (error)  {
+		failed = 5;
 		goto out;
 	}
-	/*
-	 * Hack alert we need to set in our newreno_flags
-	 * so that Abe behavior is also applied.
-	 */
-	((struct newreno *)tp->t_ccv.cc_data)->newreno_flags |= CC_NEWRENO_BETA_ECN_ENABLED;
 	opt.name = CC_NEWRENO_BETA_ECN;
 	opt.val = rack->r_ctl.rc_saved_beta.beta_ecn;
 	error = CC_ALGO(tp)->ctl_output(&tp->t_ccv, &sopt, &opt);
 	if (error) {
+		failed = 6;
 		goto out;
 	}
-	/* Save off the original values for restoral */
+	/* Save off the values for restoral */
 	memcpy(&rack->r_ctl.rc_saved_beta, &old, sizeof(struct newreno));
 out:
 	if (rack_verbose_logging && (rack->rc_tp->t_logstate != TCP_LOG_STATE_OFF)) {
 		union tcp_log_stackspecific log;
 		struct timeval tv;
-
-		ptr = ((struct newreno *)tp->t_ccv.cc_data);
-		memset(&log.u_bbr, 0, sizeof(log.u_bbr));
-		log.u_bbr.timeStamp = tcp_get_usecs(&tv);
-		if (ptr) {
-			log.u_bbr.flex1 = ptr->beta;
-			log.u_bbr.flex2 = ptr->beta_ecn;
-			log.u_bbr.flex3 = ptr->newreno_flags;
-		}
-		log.u_bbr.flex4 = rack->r_ctl.rc_saved_beta.beta;
-		log.u_bbr.flex5 = rack->r_ctl.rc_saved_beta.beta_ecn;
-		log.u_bbr.flex6 = rack->r_ctl.rc_saved_beta.newreno_flags;
-		log.u_bbr.flex7 = rack->gp_ready;
-		log.u_bbr.flex7 <<= 1;
-		log.u_bbr.flex7 |= rack->use_fixed_rate;
-		log.u_bbr.flex7 <<= 1;
-		log.u_bbr.flex7 |= rack->rc_pacing_cc_set;
-		log.u_bbr.pkts_out = rack->r_ctl.rc_prr_sndcnt;
-		log.u_bbr.flex8 = 3;
-		tcp_log_event_(tp, NULL, NULL, NULL, BBR_LOG_CWND, error,
-			       0, &log, false, NULL, NULL, 0, &tv);
-	}
-}
-
-static void
-rack_undo_cc_pacing(struct tcp_rack *rack)
-{
-	struct newreno old, *ptr;
-	struct tcpcb *tp;
-
-	if (rack->rc_pacing_cc_set == 0)
-		return;
-	tp = rack->rc_tp;
-	rack->rc_pacing_cc_set = 0;
-	if (tp->t_cc == NULL)
-		/* Tcb is leaving */
-		return;
-	if (strcmp(tp->t_cc->name, CCALGONAME_NEWRENO) != 0) {
-		/* Not new-reno nothing to do! */
-		return;
-	}
-	ptr = ((struct newreno *)tp->t_ccv.cc_data);
-	if (ptr == NULL) {
-		/*
-		 * This happens at rack_fini() if the
-		 * cc module gets freed on us. In that
-		 * case we loose our "new" settings but
-		 * thats ok, since the tcb is going away anyway.
-		 */
-		return;
-	}
-	/* Grab out our set values */
-	memcpy(&old, ptr, sizeof(struct newreno));
-	/* Copy back in the original values */
-	memcpy(ptr, &rack->r_ctl.rc_saved_beta, sizeof(struct newreno));
-	/* Now save back the values we had set in (for when pacing is restored) */
-	memcpy(&rack->r_ctl.rc_saved_beta, &old, sizeof(struct newreno));
-	if (rack_verbose_logging && (rack->rc_tp->t_logstate != TCP_LOG_STATE_OFF)) {
-		union tcp_log_stackspecific log;
-		struct timeval tv;
+		struct newreno *ptr;
 
 		ptr = ((struct newreno *)tp->t_ccv.cc_data);
 		memset(&log.u_bbr, 0, sizeof(log.u_bbr));
@@ -701,17 +641,43 @@ rack_undo_cc_pacing(struct tcp_rack *rack)
 		log.u_bbr.flex3 = ptr->newreno_flags;
 		log.u_bbr.flex4 = rack->r_ctl.rc_saved_beta.beta;
 		log.u_bbr.flex5 = rack->r_ctl.rc_saved_beta.beta_ecn;
-		log.u_bbr.flex6 = rack->r_ctl.rc_saved_beta.newreno_flags;
+		log.u_bbr.flex6 = failed;
 		log.u_bbr.flex7 = rack->gp_ready;
 		log.u_bbr.flex7 <<= 1;
 		log.u_bbr.flex7 |= rack->use_fixed_rate;
 		log.u_bbr.flex7 <<= 1;
 		log.u_bbr.flex7 |= rack->rc_pacing_cc_set;
 		log.u_bbr.pkts_out = rack->r_ctl.rc_prr_sndcnt;
-		log.u_bbr.flex8 = 4;
-		tcp_log_event_(tp, NULL, NULL, NULL, BBR_LOG_CWND, 0,
+		log.u_bbr.flex8 = flex8;
+		tcp_log_event_(tp, NULL, NULL, NULL, BBR_LOG_CWND, error,
 			       0, &log, false, NULL, NULL, 0, &tv);
 	}
+}
+
+static void
+rack_set_cc_pacing(struct tcp_rack *rack)
+{
+	if (rack->rc_pacing_cc_set)
+		return;
+	/*
+	 * Use the swap utility placing in 3 for flex8 to id a
+	 * set of a new set of values.
+	 */
+	rack->rc_pacing_cc_set = 1;
+	rack_swap_beta_values(rack, 3);
+}
+	
+static void
+rack_undo_cc_pacing(struct tcp_rack *rack)
+{
+	if (rack->rc_pacing_cc_set == 0)
+		return;
+	/*
+	 * Use the swap utility placing in 4 for flex8 to id a
+	 * restoral of the old values.
+	 */
+	rack->rc_pacing_cc_set = 0;
+	rack_swap_beta_values(rack, 4);
 }
 
 #ifdef NETFLIX_PEAKRATE
@@ -10797,16 +10763,7 @@ rack_do_fastnewdata(struct mbuf *m, struct tcphdr *th, struct socket *so,
 #ifdef NETFLIX_SB_LIMITS
 	u_int mcnt, appended;
 #endif
-#ifdef TCPDEBUG
-	/*
-	 * The size of tcp_saveipgen must be the size of the max ip header,
-	 * now IPv6.
-	 */
-	u_char tcp_saveipgen[IP6_HDR_LEN];
-	struct tcphdr tcp_savetcp;
-	short ostate = 0;
 
-#endif
 	/*
 	 * If last ACK falls within this segment's sequence numbers, record
 	 * the timestamp. NOTE that the test is modified according to the
@@ -10882,11 +10839,6 @@ rack_do_fastnewdata(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	tp->rcv_up = tp->rcv_nxt;
 	KMOD_TCPSTAT_ADD(tcps_rcvpack, nsegs);
 	KMOD_TCPSTAT_ADD(tcps_rcvbyte, tlen);
-#ifdef TCPDEBUG
-	if (so->so_options & SO_DEBUG)
-		tcp_trace(TA_INPUT, ostate, tp,
-		    (void *)tcp_saveipgen, &tcp_savetcp, 0);
-#endif
 	newsize = tcp_autorcvbuf(m, th, so, tp, tlen);
 
 	/* Add data to socket buffer. */
@@ -10937,15 +10889,6 @@ rack_fastack(struct mbuf *m, struct tcphdr *th, struct socket *so,
 {
 	int32_t acked;
 	int32_t nsegs;
-#ifdef TCPDEBUG
-	/*
-	 * The size of tcp_saveipgen must be the size of the max ip header,
-	 * now IPv6.
-	 */
-	u_char tcp_saveipgen[IP6_HDR_LEN];
-	struct tcphdr tcp_savetcp;
-	short ostate = 0;
-#endif
 	int32_t under_pacing = 0;
 	struct tcp_rack *rack;
 
@@ -11114,12 +11057,6 @@ rack_fastack(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * If data are ready to send, let tcp_output decide between more
 	 * output or persist.
 	 */
-#ifdef TCPDEBUG
-	if (so->so_options & SO_DEBUG)
-		tcp_trace(TA_INPUT, ostate, tp,
-		    (void *)tcp_saveipgen,
-		    &tcp_savetcp, 0);
-#endif
 	if (under_pacing &&
 	    (rack->use_fixed_rate == 0) &&
 	    (rack->in_probe_rtt == 0) &&
