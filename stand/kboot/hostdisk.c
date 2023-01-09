@@ -1,6 +1,7 @@
 /*-
  * Copyright (C) 2014 Nathan Whitehorn
  * All rights reserved.
+ * Copyright 2022 Netflix, Inc
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,6 +59,8 @@ struct devsw hostdisk = {
  * block devices that we can use.
  */
 #define SYSBLK "/sys/block"
+
+#define HOSTDISK_MIN_SIZE (16ul << 20)	/* 16MB */
 
 typedef STAILQ_HEAD(, hdinfo) hdinfo_list_t;
 typedef struct hdinfo {
@@ -161,6 +164,8 @@ hostdisk_add_drive(const char *drv, uint64_t secs)
 	if (!file2u64(fn, &hd->hd_sectorsize))
 		goto err;
 	hd->hd_size = hd->hd_sectors * hd->hd_sectorsize;
+	if (hd->hd_size < HOSTDISK_MIN_SIZE)
+		goto err;
 	hd->hd_flags = 0;
 	STAILQ_INIT(&hd->hd_children);
 	printf("/dev/%s: %ju %ju %ju\n",
