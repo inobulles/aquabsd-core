@@ -381,8 +381,6 @@ extern struct arch_switch archsw;
 /* This must be provided by the MD code, but should it be in the archsw? */
 void	delay(int delay);
 
-void	dev_cleanup(void);
-
 /*
  * nvstore API.
  */
@@ -415,7 +413,9 @@ int nvstore_set_var_from_string(void *, const char *, const char *,
 int nvstore_unset_var(void *, const char *);
 
 /* common code to set currdev variable. */
-extern int mount_currdev(struct env_var *, int, const void *);
+int gen_setcurrdev(struct env_var *ev, int flags, const void *value);
+int mount_currdev(struct env_var *, int, const void *);
+void set_currdev(const char *devname);
 
 #ifndef CTASSERT
 #define	CTASSERT(x)	_Static_assert(x, "compile-time assertion failed")
