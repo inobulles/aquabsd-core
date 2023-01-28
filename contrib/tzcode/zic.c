@@ -661,7 +661,7 @@ close_file(FILE *stream, char const *dir, char const *name,
 	    name ? name : "", name ? ": " : "",
 	    e);
     if (tempname)
-      remove(tempname);
+      (void)remove(tempname);
     exit(EXIT_FAILURE);
   }
 }
@@ -1418,7 +1418,7 @@ rename_dest(char *tempname, char const *name)
   if (tempname) {
     if (rename(tempname, name) != 0) {
       int rename_errno = errno;
-      remove(tempname);
+      (void)remove(tempname);
       fprintf(stderr, _("%s: rename to %s/%s: %s\n"),
 	      progname, directory, name, strerror(rename_errno));
       exit(EXIT_FAILURE);
@@ -1842,7 +1842,7 @@ getsave(char *field, bool *isdst)
 static void
 inrule(char **fields, int nfields)
 {
-	struct rule r;
+	struct rule r = { 0 };
 
 	if (nfields != RULE_FIELDS) {
 		error(_("wrong number of fields on Rule line"));
@@ -1921,7 +1921,7 @@ inzsub(char **fields, int nfields, bool iscont)
 {
 	register char *		cp;
 	char *			cp1;
-	struct zone z;
+	struct zone		z = { 0 };
 	int format_len;
 	register int		i_stdoff, i_rule, i_format;
 	register int		i_untilyear, i_untilmonth;
@@ -3933,6 +3933,14 @@ mp = _("time zone abbreviation differs from POSIX standard");
 static void
 mkdirs(char const *argname, bool ancestors)
 {
+	/*
+	 * If -D was specified, do not create directories.  A subsequent
+	 * file operation will fail and produce an appropriate error
+	 * message.
+	 */
+	if (Dflag)
+		return;
+
 	char *name = estrdup(argname);
 	char *cp = name;
 
@@ -3943,13 +3951,6 @@ mkdirs(char const *argname, bool ancestors)
 	   it can use slashes to separate the already-existing
 	   ancestor prefix from the to-be-created subdirectories.  */
 
-	/*
-	 * If -D was specified, do not create directories.  A subsequent
-	 * file operation will fail and produce an appropriate error
-	 * message.
-	 */
-	if (Dflag)
-		return;
 	/* Do not mkdir a root directory, as it must exist.  */
 	while (*cp == '/')
 	  cp++;

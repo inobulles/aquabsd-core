@@ -86,6 +86,7 @@
 #include <net/if_var.h>
 #include <net/if_media.h>
 #include <net/if_mib.h>
+#include <net/if_private.h>
 #include <net/if_vlan_var.h>
 #include <net/radix.h>
 #include <net/route.h>
@@ -4622,9 +4623,9 @@ if_vlantrunkinuse(if_t ifp)
 }
 
 int
-if_init(if_t ifp)
+if_init(if_t ifp, void *ctx)
 {
-	(*((struct ifnet *)ifp)->if_init)((struct ifnet *)ifp);
+	(*((struct ifnet *)ifp)->if_init)(ctx);
 	return (0);
 }
 
@@ -4800,6 +4801,12 @@ if_setgetcounterfn(if_t ifp, if_get_counter_t fn)
 {
 
 	ifp->if_get_counter = fn;
+}
+
+void
+if_setdebugnet_methods(if_t ifp, struct debugnet_methods *m)
+{
+	ifp->if_debugnet_methods = m;
 }
 
 #ifdef DDB
