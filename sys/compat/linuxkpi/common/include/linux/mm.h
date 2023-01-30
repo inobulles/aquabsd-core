@@ -144,9 +144,11 @@ struct vm_operations_struct {
 };
 
 struct sysinfo {
-	uint64_t totalram;
-	uint64_t totalhigh;
-	uint32_t mem_unit;
+	uint64_t totalram;	/* Total usable main memory size */
+	uint64_t freeram;	/* Available memory size */
+	uint64_t totalhigh;	/* Total high memory size */
+	uint64_t freehigh;	/* Available high memory size */
+	uint32_t mem_unit;	/* Memory unit size in bytes */
 };
 
 /*
@@ -345,6 +347,11 @@ void lkpi_unmap_mapping_range(void *obj, loff_t const holebegin __unused,
 #define PAGE_ALIGNED(p)	__is_aligned(p, PAGE_SIZE)
 
 void vma_set_file(struct vm_area_struct *vma, struct linux_file *file);
+
+static inline void
+might_alloc(gfp_t gfp_mask __unused)
+{
+}
 
 #define	is_cow_mapping(flags)	(false)
 

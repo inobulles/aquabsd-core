@@ -1371,7 +1371,7 @@ distributeworld installworld stageworld: _installcheck_world .PHONY
 		if progpath=`env PATH=${TMPPATH:Q} which $$prog`; then \
 			echo $$progpath; \
 		else \
-			echo "Required tool $$prog not found in PATH ($$PATH)." >&2; \
+			echo "Required tool $$prog not found in PATH ("${TMPPATH:Q}")." >&2; \
 			exit 1; \
 		fi; \
 	    done); \
@@ -2444,6 +2444,11 @@ _basic_bootstrap_tools+=usr.bin/jot
 .if ${MK_BOOT} != "no"
 # md5 is used by boot/beri (and possibly others)
 _basic_bootstrap_tools+=sbin/md5
+.endif
+
+# tzsetup is needed as an install tool
+.if ${MK_ZONEINFO} != "no"
+_basic_bootstrap_tools+=usr.sbin/tzsetup
 .endif
 
 .if defined(BOOTSTRAP_ALL_TOOLS)
