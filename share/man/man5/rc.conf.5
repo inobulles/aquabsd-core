@@ -24,7 +24,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd November 14, 2022
+.Dd February 17, 2023
 .Dt RC.CONF 5
 .Os
 .Sh NAME
@@ -80,8 +80,13 @@ script in the
 .Pa /etc/rc.conf.d
 directory or
 .Ao Ar dir Ac Ns Pa /rc.conf.d
-directories specified in
-.Va local_startup ,
+directories (where
+.Ao Ar dir Ac
+is each entry specified in
+ .Va local_startup ,
+but with any trailing
+.Pa /rc.d
+stripped),
 which will be included by the
 .Va load_rc_config
 function.
@@ -4495,6 +4500,13 @@ Bus address of the USB Bluetooth controller.
 Check the output of
 .Xr usbconfig 8
 on your system to find this information.
+.It Va utx_enable
+.Pq Vt bool
+Set to
+.Dq Li YES
+to enable user accounting through the
+.Xr utx 8
+facility.
 .It Va netwait_enable
 .Pq Vt bool
 If set to
@@ -4965,6 +4977,7 @@ these are the flags to pass to the
 .Xr sysrc 8 ,
 .Xr unbound 8 ,
 .Xr usbconfig 8 ,
+.Xr utx 8 ,
 .Xr wlandebug 8 ,
 .Xr yp 8 ,
 .Xr ypbind 8 ,

@@ -87,11 +87,6 @@ __FBSDID("$FreeBSD$");
 #define RX_COPY_THRESHOLD MINCLSIZE
 #endif
 
-/* Internal mbuf flags stored in PH_loc.eight[1]. */
-#define	MC_NOMAP		0x01
-#define	MC_RAW_WR		0x02
-#define	MC_TLS			0x04
-
 /*
  * Ethernet frames are DMA'd at this byte offset into the freelist buffer.
  * 0-7 are valid values.
@@ -345,6 +340,7 @@ static inline u_int txpkt_eo_len16(u_int, u_int, u_int);
 #endif
 static int ethofld_fw4_ack(struct sge_iq *, const struct rss_header *,
     struct mbuf *);
+static int ethofld_transmit(struct ifnet *, struct mbuf *);
 #endif
 
 static counter_u64_t extfree_refs;
@@ -1998,8 +1994,7 @@ eth_rx(struct adapter *sc, struct sge_rxq *rxq, const struct iq_desc *d,
 		    sc->params.sge.fl_pktshift;
 		frame = sd->cl + fl->rx_offset + sc->params.sge.fl_pktshift;
 		CURVNET_SET_QUIET(ifp->if_vnet);
-		rc = pfil_run_hooks(vi->pfil, frame, ifp,
-		    slen | PFIL_MEMPTR | PFIL_IN, NULL);
+		rc = pfil_mem_in(vi->pfil, frame, slen, ifp, &m0);
 		CURVNET_RESTORE();
 		if (rc == PFIL_DROPPED || rc == PFIL_CONSUMED) {
 			skip_fl_payload(sc, fl, plen);
@@ -2007,7 +2002,6 @@ eth_rx(struct adapter *sc, struct sge_rxq *rxq, const struct iq_desc *d,
 		}
 		if (rc == PFIL_REALLOCED) {
 			skip_fl_payload(sc, fl, plen);
-			m0 = pfil_mem2mbuf(frame);
 			goto have_mbuf;
 		}
 	}
@@ -2283,64 +2277,6 @@ t4_update_fl_bufsize(struct ifnet *ifp)
 		FL_UNLOCK(fl);
 	}
 #endif
-}
-
-static inline int
-mbuf_nsegs(struct mbuf *m)
-{
-
-	M_ASSERTPKTHDR(m);
-	KASSERT(m->m_pkthdr.inner_l5hlen > 0,
-	    ("%s: mbuf %p missing information on # of segments.", __func__, m));
-
-	return (m->m_pkthdr.inner_l5hlen);
-}
-
-static inline void
-set_mbuf_nsegs(struct mbuf *m, uint8_t nsegs)
-{
-
-	M_ASSERTPKTHDR(m);
-	m->m_pkthdr.inner_l5hlen = nsegs;
-}
-
-static inline int
-mbuf_cflags(struct mbuf *m)
-{
-
-	M_ASSERTPKTHDR(m);
-	return (m->m_pkthdr.PH_loc.eight[4]);
-}
-
-static inline void
-set_mbuf_cflags(struct mbuf *m, uint8_t flags)
-{
-
-	M_ASSERTPKTHDR(m);
-	m->m_pkthdr.PH_loc.eight[4] = flags;
-}
-
-static inline int
-mbuf_len16(struct mbuf *m)
-{
-	int n;
-
-	M_ASSERTPKTHDR(m);
-	n = m->m_pkthdr.PH_loc.eight[0];
-	if (!(mbuf_cflags(m) & MC_TLS))
-		MPASS(n > 0 && n <= SGE_MAX_WR_LEN / 16);
-
-	return (n);
-}
-
-static inline void
-set_mbuf_len16(struct mbuf *m, uint8_t len16)
-{
-
-	M_ASSERTPKTHDR(m);
-	if (!(mbuf_cflags(m) & MC_TLS))
-		MPASS(len16 > 0 && len16 <= SGE_MAX_WR_LEN / 16);
-	m->m_pkthdr.PH_loc.eight[0] = len16;
 }
 
 #ifdef RATELIMIT
@@ -2755,16 +2691,12 @@ restart:
 #endif
 #ifdef KERN_TLS
 	if (mst != NULL && mst->sw->type == IF_SND_TAG_TYPE_TLS) {
-		int len16;
-
 		cflags |= MC_TLS;
 		set_mbuf_cflags(m0, cflags);
-		rc = t6_ktls_parse_pkt(m0, &nsegs, &len16);
+		rc = t6_ktls_parse_pkt(m0);
 		if (rc != 0)
 			goto fail;
-		set_mbuf_nsegs(m0, nsegs);
-		set_mbuf_len16(m0, len16);
-		return (0);
+		return (EINPROGRESS);
 	}
 #endif
 	if (nsegs > max_nsegs_allowed(m0, vm_wr)) {
@@ -2962,6 +2894,10 @@ restart:
 		set_mbuf_eo_nsegs(m0, nsegs);
 		set_mbuf_eo_len16(m0,
 		    txpkt_eo_len16(nsegs, immhdrs, needs_tso(m0)));
+		rc = ethofld_transmit(mst->ifp, m0);
+		if (rc != 0)
+			goto fail;
+		return (EINPROGRESS);
 	}
 #endif
 #endif
@@ -3320,8 +3256,7 @@ skip_coalescing:
 #ifdef KERN_TLS
 		} else if (mbuf_cflags(m0) & MC_TLS) {
 			ETHER_BPF_MTAP(ifp, m0);
-			n = t6_ktls_write_wr(txq, wr, m0, mbuf_nsegs(m0),
-			    avail);
+			n = t6_ktls_write_wr(txq, wr, m0, avail);
 #endif
 		} else {
 			ETHER_BPF_MTAP(ifp, m0);
@@ -6849,7 +6784,7 @@ ethofld_tx(struct cxgbe_rate_tag *cst)
 	}
 }
 
-int
+static int
 ethofld_transmit(struct ifnet *ifp, struct mbuf *m0)
 {
 	struct cxgbe_rate_tag *cst;
@@ -6905,8 +6840,6 @@ ethofld_transmit(struct ifnet *ifp, struct mbuf *m0)
 
 done:
 	mtx_unlock(&cst->lock);
-	if (__predict_false(rc != 0))
-		m_freem(m0);
 	return (rc);
 }
 
