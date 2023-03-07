@@ -25,6 +25,7 @@ cscope.po.out
 compile_commands.json
 compile_commands.events.json
 tags
+.cache
 .clangd
 .ccls-cache
 artifacts
