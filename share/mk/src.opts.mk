@@ -192,12 +192,12 @@ __DEFAULT_YES_OPTIONS = \
     ZONEINFO
 
 __DEFAULT_NO_OPTIONS = \
-    ATM \
     BEARSSL \
     BHYVE_SNAPSHOT \
     CLANG_EXTRAS \
     CLANG_FORMAT \
     DETECT_TZ_CHANGES \
+    DISK_IMAGE_TOOLS_BOOTSTRAP \
     DTRACE_TESTS \
     EXPERIMENTAL \
     HESIOD \
@@ -352,14 +352,9 @@ __DEFAULT_YES_OPTIONS+=OPENMP
 __DEFAULT_NO_OPTIONS+=OPENMP
 .endif
 
-.if ${__T} != "i386" && ${__T} != "amd64" && \
-    ${__T:Mpowerpc64*} == ""
+# Broken on 32-bit arm, kernel module compile errors
+.if ${__T:Marm*} != ""
 BROKEN_OPTIONS+= OFED
-.endif
-
-
-.if ${__T} == "powerpc"
-BROKEN_OPTIONS+= ZFS
 .endif
 
 .include <bsd.mkopt.mk>
@@ -406,7 +401,6 @@ MK_DMAGENT:=	no
 .endif
 
 .if ${MK_NETGRAPH} == "no"
-MK_ATM:=	no
 MK_BLUETOOTH:=	no
 .endif
 
@@ -422,6 +416,7 @@ MK_KERBEROS:=	no
 MK_KERBEROS_SUPPORT:=	no
 MK_LDNS:=	no
 MK_PKGBOOTSTRAP:=	no
+MK_LOADER_ZFS:=	no
 MK_ZFS:=	no
 .endif
 
