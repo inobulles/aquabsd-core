@@ -17,7 +17,8 @@ options="
 	WITHOUT_PAM_SUPPORT=yes
 	WITHOUT_VT=yes
 	WITHOUT_SVNLITE=yes
-	WITHOUT_RESCUE=yes"
+	WITHOUT_RESCUE=yes
+	WITHOUT_TESTS=yes"
 
 # variables
 
