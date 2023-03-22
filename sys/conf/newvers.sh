@@ -53,8 +53,8 @@
 #
 
 TYPE="aquaBSD"
-REVISION="1.0-1222a"
-BRANCH="BETA"
+REVISION="0.1.0"
+BRANCH="beta"
 if [ -n "${BRANCH_OVERRIDE}" ]; then
 	BRANCH=${BRANCH_OVERRIDE}
 fi
