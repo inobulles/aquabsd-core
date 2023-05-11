@@ -6,6 +6,9 @@ freebsd_instance:
   memory: 8G
   disk: 40
 
+env:
+  PKG_FORMAT: tar
+
 task:
   name: Build aquaBSD base and kernel for 'amd64' target
   env:

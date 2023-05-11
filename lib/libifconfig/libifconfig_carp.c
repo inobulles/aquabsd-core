@@ -55,7 +55,7 @@ static struct snl_attr_parser ap_carp_get[] = {
 	{ .type = CARP_NL_STATE, .off = _OUT(carpr_state), .cb = snl_attr_get_uint32 },
 	{ .type = CARP_NL_ADVBASE, .off = _OUT(carpr_advbase), .cb = snl_attr_get_int32 },
 	{ .type = CARP_NL_ADVSKEW, .off = _OUT(carpr_advskew), .cb = snl_attr_get_int32 },
-	{ .type = CARP_NL_KEY, .off = _OUT(carpr_key), .cb = snl_attr_get_string },
+	{ .type = CARP_NL_KEY, .off = _OUT(carpr_key), .cb = snl_attr_copy_string, .arg_u32 = CARP_KEY_LEN },
 	{ .type = CARP_NL_ADDR, .off = _OUT(carpr_addr), .cb = snl_attr_get_in_addr },
 	{ .type = CARP_NL_ADDR6, .off = _OUT(carpr_addr6), .cb = snl_attr_get_in6_addr },
 };
@@ -73,16 +73,11 @@ _ifconfig_carp_get(ifconfig_handle_t *h, const char *name,
 	struct nlmsghdr *hdr;
 	size_t i = 0;
 	uint32_t seq_id;
-	unsigned int ifindex;
 	int family_id;
 
 	ifconfig_error_clear(h);
 
-	ifindex = if_nametoindex(name);
-	if (ifindex == 0) {
-		ifconfig_error(h, NETLINK, ENOENT);
-		return (-1);
-	}
+	bzero(carp, sizeof(*carp) * ncarp);
 
 	if (! snl_init(&ss, NETLINK_GENERIC)) {
 		ifconfig_error(h, NETLINK, ENOTSUP);
@@ -100,7 +95,7 @@ _ifconfig_carp_get(ifconfig_handle_t *h, const char *name,
 	hdr = snl_create_genl_msg_request(&nw, family_id, CARP_NL_CMD_GET);
 	hdr->nlmsg_flags |= NLM_F_DUMP;
 
-	snl_add_msg_attr_u32(&nw, CARP_NL_IFINDEX, ifindex);
+	snl_add_msg_attr_string(&nw, CARP_NL_IFNAME, name);
 
 	if (vhid != 0)
 		snl_add_msg_attr_u32(&nw, CARP_NL_VHID, vhid);
@@ -153,17 +148,10 @@ ifconfig_carp_set_info(ifconfig_handle_t *h, const char *name,
 	struct snl_state ss = {};
 	struct snl_writer nw;
 	struct nlmsghdr *hdr;
-	unsigned int ifindex;
 	int family_id;
 	uint32_t seq_id;
 
 	ifconfig_error_clear(h);
-
-	ifindex = if_nametoindex(name);
-	if (ifindex == 0) {
-		ifconfig_error(h, NETLINK, ENOENT);
-		return (-1);
-	}
 
 	if (! snl_init(&ss, NETLINK_GENERIC)) {
 		ifconfig_error(h, NETLINK, ENOTSUP);
@@ -183,11 +171,12 @@ ifconfig_carp_set_info(ifconfig_handle_t *h, const char *name,
 	snl_add_msg_attr_u32(&nw, CARP_NL_STATE, carpr->carpr_state);
 	snl_add_msg_attr_s32(&nw, CARP_NL_ADVBASE, carpr->carpr_advbase);
 	snl_add_msg_attr_s32(&nw, CARP_NL_ADVSKEW, carpr->carpr_advskew);
-	snl_add_msg_attr_u32(&nw, CARP_NL_IFINDEX, ifindex);
+	snl_add_msg_attr_string(&nw, CARP_NL_IFNAME, name);
 	snl_add_msg_attr(&nw, CARP_NL_ADDR, sizeof(carpr->carpr_addr),
 	    &carpr->carpr_addr);
 	snl_add_msg_attr(&nw, CARP_NL_ADDR6, sizeof(carpr->carpr_addr6),
 	    &carpr->carpr_addr6);
+	snl_add_msg_attr_string(&nw, CARP_NL_KEY, carpr->carpr_key);
 
 	hdr = snl_finalize_msg(&nw);
 	if (hdr == NULL) {
