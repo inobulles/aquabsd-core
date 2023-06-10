@@ -1,5 +1,5 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2013 Yahoo!, Inc.
  * All rights reserved.
@@ -64,8 +64,8 @@ mfi_ctrl_set_properties(int fd, struct mfi_ctrl_props *info)
 }
 
 /*
- * aquire the controller properties data structure modify the
- * rebuild rate if requested and then retun
+ * Acquire the controller properties data structure, modify the
+ * rebuild rate if requested and then return
  */
 static int
 mfi_ctrl_rebuild_rate(int ac, char **av)

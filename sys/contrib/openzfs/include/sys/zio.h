@@ -190,7 +190,6 @@ typedef uint64_t zio_flag_t;
 #define	ZIO_FLAG_SPECULATIVE	(1ULL << 8)
 #define	ZIO_FLAG_CONFIG_WRITER	(1ULL << 9)
 #define	ZIO_FLAG_DONT_RETRY	(1ULL << 10)
-#define	ZIO_FLAG_DONT_CACHE	(1ULL << 11)
 #define	ZIO_FLAG_NODATA		(1ULL << 12)
 #define	ZIO_FLAG_INDUCE_DAMAGE	(1ULL << 13)
 #define	ZIO_FLAG_IO_ALLOCATING	(1ULL << 14)
@@ -531,6 +530,12 @@ enum blk_verify_flag {
 	BLK_VERIFY_HALT
 };
 
+enum blk_config_flag {
+	BLK_CONFIG_HELD,   // SCL_VDEV held for writer
+	BLK_CONFIG_NEEDED, // SCL_VDEV should be obtained for reader
+	BLK_CONFIG_SKIP,   // skip checks which require SCL_VDEV
+};
+
 extern int zio_bookmark_compare(const void *, const void *);
 
 extern zio_t *zio_null(zio_t *pio, spa_t *spa, vdev_t *vd,
@@ -646,7 +651,7 @@ extern int zio_resume(spa_t *spa);
 extern void zio_resume_wait(spa_t *spa);
 
 extern boolean_t zfs_blkptr_verify(spa_t *spa, const blkptr_t *bp,
-    boolean_t config_held, enum blk_verify_flag blk_verify);
+    enum blk_config_flag blk_config, enum blk_verify_flag blk_verify);
 
 /*
  * Initial setup and teardown.

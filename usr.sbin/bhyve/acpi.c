@@ -1,5 +1,5 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2012 NetApp, Inc.
  * All rights reserved.
@@ -422,7 +422,7 @@ basl_make_templates(void)
 
 	if (!err) {
 		/*
-		 * len has been intialized (and maybe adjusted) above
+		 * len has been initialized (and maybe adjusted) above
 		 */
 		if ((len + sizeof(BHYVE_ASL_TEMPLATE) + 1 +
 		     sizeof(BHYVE_ASL_SUFFIX)) < MAXPATHLEN) {

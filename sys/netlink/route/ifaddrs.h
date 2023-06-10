@@ -1,5 +1,5 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Alexander V. Chernikov <melifaro@FreeBSD.org>
  *
@@ -55,9 +55,9 @@ enum {
 	IFA_LABEL		= 3, /* string, interface name */
 	IFA_BROADCAST		= 4, /* binary, broadcast ifa */
 	IFA_ANYCAST		= 5, /* not supported */
-	IFA_CACHEINFO		= 6, /* not supported */
+	IFA_CACHEINFO		= 6, /* binary, struct ifa_cacheinfo */
 	IFA_MULTICAST		= 7, /* not supported */
-	IFA_FLAGS		= 8, /* not supported */
+	IFA_FLAGS		= 8, /* u32, IFA_F flags */
 	IFA_RT_PRIORITY		= 9, /* not supported */
 	IFA_TARGET_NETNSID	= 10, /* not supported */
 	IFA_FREEBSD		= 11, /* nested, FreeBSD-specific */

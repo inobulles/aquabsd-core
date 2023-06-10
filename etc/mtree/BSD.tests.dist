@@ -750,6 +750,8 @@
                 ..
             ..
         ..
+        compat32
+        ..
         devrandom
         ..
         dtrace
@@ -1033,6 +1035,8 @@
         dirname
         ..
         du
+        ..
+        factor
         ..
         file2c
         ..
