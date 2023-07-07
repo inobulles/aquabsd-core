@@ -1,8 +1,12 @@
 /*
  * SPDX-License-Identifier: CDDL 1.0
  *
- * Copyright 2022 Christos Margiolis <christos@FreeBSD.org>
- * Copyright 2022 Mark Johnston <markj@FreeBSD.org>
+ * Copyright (c) 2022 Christos Margiolis <christos@FreeBSD.org>
+ * Copyright (c) 2022 Mark Johnston <markj@FreeBSD.org>
+ * Copyright (c) 2023 The FreeBSD Foundation
+ *
+ * Portions of this software were developed by Christos Margiolis
+ * <christos@FreeBSD.org> under sponsorship from the FreeBSD Foundation.
  */
 
 #ifndef _KINST_ISA_H_
@@ -18,7 +22,6 @@
  * to 16 bytes, 32 bytes is enough to cover even the worst case scenario.
  */
 #define	KINST_TRAMP_SIZE	32
-#define	KINST_TRAMPCHUNK_SIZE	PAGE_SIZE
 
 typedef uint8_t kinst_patchval_t;
 

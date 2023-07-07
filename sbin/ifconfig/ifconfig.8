@@ -28,7 +28,7 @@
 .\"     From: @(#)ifconfig.8	8.3 (Berkeley) 1/5/94
 .\" $FreeBSD$
 .\"
-.Dd May 22, 2023
+.Dd June 20, 2023
 .Dt IFCONFIG 8
 .Os
 .Sh NAME
@@ -156,6 +156,9 @@ Adjust the display of link-level ethernet (MAC) addresses:
 Separate address segments with a colon
 .It Cm dash
 Separate address segments with a dash
+.It Cm dotted
+Dotted notation, for example:
+.Ql 5254.0015.4a3b
 .It Cm default
 Default format,
 .Cm colon
@@ -506,6 +509,9 @@ This action does not automatically disable routes using the interface.
 .It Cm group Ar groupname
 Assign the interface to a
 .Dq group .
+The
+.Ar groupname
+may not be longer than 15 characters and must not end in a digit.
 Any interface can be in multiple groups.
 .Pp
 Cloned interfaces are members of their interface family group by default.

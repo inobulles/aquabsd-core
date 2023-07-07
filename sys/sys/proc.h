@@ -113,6 +113,8 @@ struct pgrp {
 	pid_t		pg_id;		/* (c) Process group id. */
 	struct mtx	pg_mtx;		/* Mutex to protect members */
 	int		pg_flags;	/* (m) PGRP_ flags */
+	struct sx	pg_killsx;	/* Mutual exclusion between group member
+					 * fork() and killpg() */
 };
 
 #define	PGRP_ORPHANED	0x00000001	/* Group is orphaned */
@@ -430,7 +432,7 @@ do {									\
 #define	TD_LOCKS_INC(td)	((td)->td_locks++)
 #define	TD_LOCKS_DEC(td) do {						\
 	KASSERT(SCHEDULER_STOPPED_TD(td) || (td)->td_locks > 0,		\
-	    ("thread %p owns no locks", (td)));				\
+	    ("Thread %p owns no locks", (td)));				\
 	(td)->td_locks--;						\
 } while (0)
 #else
@@ -720,6 +722,7 @@ struct proc {
 	int		p_pendingexits; /* (c) Count of pending thread exits. */
 	struct filemon	*p_filemon;	/* (c) filemon-specific data. */
 	int		p_pdeathsig;	/* (c) Signal from parent on exit. */
+	int		p_killpg_cnt;
 /* End area that is zeroed on creation. */
 #define	p_endzero	p_magic
 
@@ -1234,6 +1237,7 @@ void	userret(struct thread *, struct trapframe *);
 
 void	cpu_exit(struct thread *);
 void	exit1(struct thread *, int, int) __dead2;
+void	exit2(struct thread *, int, int, bool) __dead2;
 void	cpu_copy_thread(struct thread *td, struct thread *td0);
 bool	cpu_exec_vmspace_reuse(struct proc *p, struct vm_map *map);
 int	cpu_fetch_syscall_args(struct thread *td);

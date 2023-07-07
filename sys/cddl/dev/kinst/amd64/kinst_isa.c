@@ -1,8 +1,12 @@
 /*
  * SPDX-License-Identifier: CDDL 1.0
  *
- * Copyright 2022 Christos Margiolis <christos@FreeBSD.org>
- * Copyright 2022 Mark Johnston <markj@FreeBSD.org>
+ * Copyright (c) 2022 Christos Margiolis <christos@FreeBSD.org>
+ * Copyright (c) 2022 Mark Johnston <markj@FreeBSD.org>
+ * Copyright (c) 2023 The FreeBSD Foundation
+ *
+ * Portions of this software were developed by Christos Margiolis
+ * <christos@FreeBSD.org> under sponsorship from the FreeBSD Foundation.
  */
 
 #include <sys/param.h>
@@ -197,7 +201,7 @@ kinst_invop(uintptr_t addr, struct trapframe *frame, uintptr_t scratch)
 		if ((frame->tf_rflags & PSL_I) == 0)
 			tramp = DPCPU_GET(intr_tramp);
 		else
-			tramp = curthread->t_kinst;
+			tramp = curthread->t_kinst_tramp;
 		if (tramp == NULL) {
 			/*
 			 * A trampoline allocation failed, so this probe is
