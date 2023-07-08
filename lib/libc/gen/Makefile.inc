@@ -572,9 +572,7 @@ MLINKS+=wordexp.3 wordfree.3
 
 afterinstallconfig: install-passwd
 install-passwd: .PHONY
-.if ${MK_TCSH} == "no"
 	sed -i "" -e 's;/bin/csh;/bin/sh;' ${DESTDIR}/etc/master.passwd
-.endif
 	${PWD_MKDB_CMD} -i -p -d ${DESTDIR}/etc ${DESTDIR}/etc/master.passwd
 .if defined(NO_ROOT) && defined(METALOG)
 	( \

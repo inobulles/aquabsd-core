@@ -163,7 +163,6 @@ __DEFAULT_YES_OPTIONS = \
     QUOTAS \
     RADIUS_SUPPORT \
     RBOOTD \
-    RESCUE \
     ROUTED \
     SENDMAIL \
     SERVICESDB \
@@ -179,7 +178,6 @@ __DEFAULT_YES_OPTIONS = \
     SYSTEM_LINKER \
     TALK \
     TCP_WRAPPERS \
-    TCSH \
     TELNET \
     TEXTPROC \
     TFTP \

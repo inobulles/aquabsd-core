@@ -15,7 +15,7 @@ CFLAGS+=	-I${SRCTOP}/sys/contrib/zstd/lib
 
 .if ${MK_DYNAMICROOT} == "no"
 .warning ${PROG} built without libcasper support
-.elif ${MK_CASPER} != "no" && !defined(RESCUE)
+.elif ${MK_CASPER} != "no"
 CFLAGS+=	-DWITH_CASPER
 LIBADD+=	casper cap_fileargs cap_syslog
 .endif

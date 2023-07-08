@@ -1498,9 +1498,6 @@ option.
 Exclude build metadata (such as the build time, user, or host)
 from the kernel, boot loaders, and uname output, so that builds produce
 bit-for-bit identical output.
-.It Va WITHOUT_RESCUE
-Do not build
-.Xr rescue 8 .
 .It Va WITH_RETPOLINE
 Build the base system with the retpoline speculative execution
 vulnerability mitigation for CVE-2017-5715.
@@ -1647,11 +1644,6 @@ and
 Do not build or install
 .Xr tcpd 8 ,
 and related utilities.
-.It Va WITHOUT_TCSH
-Do not build and install
-.Pa /bin/csh
-(which is
-.Xr tcsh 1 ) .
 .It Va WITHOUT_TELNET
 Do not build
 .Xr telnet 1

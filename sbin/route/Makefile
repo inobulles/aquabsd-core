@@ -25,7 +25,7 @@ SRCS+= route_netlink.c
 CFLAGS+=-DWITHOUT_NETLINK
 .endif
 
-.if ${MK_JAIL} != "no" && !defined(RESCUE)
+.if ${MK_JAIL} != "no"
 CFLAGS+= -DJAIL
 LIBADD+= jail
 .endif

@@ -9,7 +9,6 @@ cd $1 # desired source directory
 options="
 	WITHOUT_TOOLCHAIN=yes
 	WITHOUT_LIB32=yes
-	WITHOUT_TCSH=yes
 	WITHOUT_FREEBSD_UPDATE=yes
 	WITHOUT_PORTSNAP=yes
 	WITHOUT_SENDMAIL=yes
@@ -17,7 +16,6 @@ options="
 	WITHOUT_PAM_SUPPORT=yes
 	WITHOUT_VT=yes
 	WITHOUT_SVNLITE=yes
-	WITHOUT_RESCUE=yes
 	WITHOUT_TESTS=yes"
 
 # variables

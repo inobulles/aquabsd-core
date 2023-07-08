@@ -62,7 +62,7 @@ shell(void *str)
 	if (bangexp(cmd, sizeof(cmd)) < 0)
 		return (1);
 	if ((sh = value("SHELL")) == NULL)
-		sh = _PATH_CSHELL;
+		sh = _PATH_BSHELL;
 	(void)run_command(sh, 0, -1, -1, "-c", cmd, NULL);
 	(void)signal(SIGINT, sigint);
 	printf("!\n");
@@ -80,7 +80,7 @@ dosh(void *str __unused)
 	char *sh;
 
 	if ((sh = value("SHELL")) == NULL)
-		sh = _PATH_CSHELL;
+		sh = _PATH_BSHELL;
 	(void)run_command(sh, 0, -1, -1, NULL);
 	(void)signal(SIGINT, sigint);
 	printf("\n");

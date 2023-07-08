@@ -16,7 +16,7 @@ HAS_TESTS=
 SUBDIR.${MK_TESTS}+= tests
 
 # Temporary disable building cat with Casper.
-#.if ${MK_CASPER} != "no" && !defined(RESCUE) && !defined(BOOTSTRAPPING)
+#.if ${MK_CASPER} != "no" && !defined(BOOTSTRAPPING)
 #LIBADD+=        casper
 #LIBADD+=        cap_fileargs
 #LIBADD+=        cap_net

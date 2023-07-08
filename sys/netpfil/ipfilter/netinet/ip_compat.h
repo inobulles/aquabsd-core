@@ -1204,10 +1204,6 @@ typedef	struct	tcpiphdr	tcpiphdr_t;
 # define	MIN(a,b)	(((a)<(b))?(a):(b))
 #endif
 
-#ifdef RESCUE
-# undef IPFILTER_BPF
-#endif
-
 #ifdef IPF_DEBUG
 # define	DPRINT(x)	printf x
 #else

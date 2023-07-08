@@ -30,8 +30,6 @@ ipf_l.h: lexer.h
 	sed -e 's/yy/ipf_yy/g' \
 	    ${.ALLSRC} > ${.TARGET}
 
-.if !defined(RESCUE)
 LIBADD+=	pcap
-.endif
 
 .include <bsd.prog.mk>

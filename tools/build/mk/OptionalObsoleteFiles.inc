@@ -1721,7 +1721,6 @@ OLD_FILES+=usr/share/examples/bootforth/screen.4th
 OLD_FILES+=usr/share/examples/bsdconfig/add_some_packages.sh
 OLD_FILES+=usr/share/examples/bsdconfig/browse_packages_http.sh
 OLD_FILES+=usr/share/examples/bsdconfig/bsdconfigrc
-OLD_FILES+=usr/share/examples/csh/dot.cshrc
 OLD_FILES+=usr/share/examples/diskless/ME
 OLD_FILES+=usr/share/examples/diskless/README.BOOTP
 OLD_FILES+=usr/share/examples/diskless/README.TEMPLATING
@@ -1933,8 +1932,6 @@ OLD_FILES+=usr/share/examples/sunrpc/sort/Makefile
 OLD_FILES+=usr/share/examples/sunrpc/sort/rsort.c
 OLD_FILES+=usr/share/examples/sunrpc/sort/sort.x
 OLD_FILES+=usr/share/examples/sunrpc/sort/sort_proc.c
-OLD_FILES+=usr/share/examples/tcsh/complete.tcsh
-OLD_FILES+=usr/share/examples/tcsh/csh-mode.el
 OLD_FILES+=usr/share/examples/uefisign/uefikeys
 OLD_FILES+=usr/share/examples/ypldap/ypldap.conf
 OLD_DIRS+=usr/share/examples
@@ -1944,7 +1941,6 @@ OLD_DIRS+=usr/share/examples/IPv6
 OLD_DIRS+=usr/share/examples/bhyve
 OLD_DIRS+=usr/share/examples/bootforth
 OLD_DIRS+=usr/share/examples/bsdconfig
-OLD_DIRS+=usr/share/examples/csh
 OLD_DIRS+=usr/share/examples/diskless
 OLD_DIRS+=usr/share/examples/dma
 OLD_DIRS+=usr/share/examples/drivers
@@ -1993,7 +1989,6 @@ OLD_DIRS+=usr/share/examples/sunrpc
 OLD_DIRS+=usr/share/examples/sunrpc/dir
 OLD_DIRS+=usr/share/examples/sunrpc/msg
 OLD_DIRS+=usr/share/examples/sunrpc/sort
-OLD_DIRS+=usr/share/examples/tcsh
 OLD_DIRS+=usr/share/examples/uefisign
 OLD_DIRS+=usr/share/examples/ypldap
 .endif
@@ -7117,15 +7112,6 @@ OLD_FILES+=usr/libexec/rbootd
 OLD_FILES+=usr/share/man/man8/rbootd.8.gz
 .endif
 
-.if ${MK_RESCUE} == no
-. if exists(${DESTDIR}${TESTSBASE})
-RESCUE_DIRS!=find ${DESTDIR}/rescue -type d 2>/dev/null | sed -e 's,^${DESTDIR}/,,'; echo
-OLD_DIRS+=${RESCUE_DIRS}
-RESCUE_FILES!=find ${DESTDIR}/rescue \! -type d 2>/dev/null | sed -e 's,^${DESTDIR}/,,'; echo
-OLD_FILES+=${RESCUE_FILES}
-. endif
-.endif
-
 .if ${MK_ROUTED} == no
 OLD_FILES+=etc/rc.d/routed
 OLD_FILES+=rescue/routed
@@ -7580,75 +7566,6 @@ OLD_FILES+=usr/bin/talk
 OLD_FILES+=usr/libexec/ntalkd
 OLD_FILES+=usr/share/man/man1/talk.1.gz
 OLD_FILES+=usr/share/man/man8/talkd.8.gz
-.endif
-
-.if ${MK_TCSH} == no
-OLD_FILES+=.cshrc
-OLD_FILES+=etc/csh.cshrc
-OLD_FILES+=etc/csh.login
-OLD_FILES+=etc/csh.logout
-OLD_FILES+=bin/csh
-OLD_FILES+=bin/tcsh
-OLD_FILES+=rescue/csh
-OLD_FILES+=rescue/tcsh
-OLD_FILES+=root/.cshrc
-OLD_FILES+=root/.login
-OLD_FILES+=usr/share/examples/etc/csh.cshrc
-OLD_FILES+=usr/share/examples/etc/csh.login
-OLD_FILES+=usr/share/examples/etc/csh.logout
-OLD_FILES+=usr/share/examples/tcsh/complete.tcsh
-OLD_FILES+=usr/share/examples/tcsh/csh-mode.el
-OLD_DIRS+=usr/share/examples/tcsh
-OLD_FILES+=usr/share/man/man1/csh.1.gz
-OLD_FILES+=usr/share/man/man1/tcsh.1.gz
-OLD_FILES+=usr/share/nls/de_AT.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/de_AT.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/de_AT.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/de_CH.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/de_CH.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/de_CH.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/de_DE.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/de_DE.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/de_DE.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/el_GR.ISO8859-7/tcsh.cat
-OLD_FILES+=usr/share/nls/el_GR.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/es_ES.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/es_ES.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/es_ES.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/et_EE.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/et_EE.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/fi_FI.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/fi_FI.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/fi_FI.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_BE.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_BE.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_BE.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_CA.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_CA.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_CA.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_CH.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_CH.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_CH.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_FR.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_FR.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/fr_FR.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/it_CH.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/it_CH.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/it_CH.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/it_IT.ISO8859-1/tcsh.cat
-OLD_FILES+=usr/share/nls/it_IT.ISO8859-15/tcsh.cat
-OLD_FILES+=usr/share/nls/it_IT.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/ja_JP.SJIS/tcsh.cat
-OLD_FILES+=usr/share/nls/ja_JP.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/ja_JP.eucJP/tcsh.cat
-OLD_FILES+=usr/share/nls/ru_RU.CP1251/tcsh.cat
-OLD_FILES+=usr/share/nls/ru_RU.CP866/tcsh.cat
-OLD_FILES+=usr/share/nls/ru_RU.ISO8859-5/tcsh.cat
-OLD_FILES+=usr/share/nls/ru_RU.KOI8-R/tcsh.cat
-OLD_FILES+=usr/share/nls/ru_RU.UTF-8/tcsh.cat
-OLD_FILES+=usr/share/nls/uk_UA.ISO8859-5/tcsh.cat
-OLD_FILES+=usr/share/nls/uk_UA.KOI8-U/tcsh.cat
-OLD_FILES+=usr/share/nls/uk_UA.UTF-8/tcsh.cat
 .endif
 
 .if ${MK_TELNET} == no

@@ -65,7 +65,7 @@ CFLAGS+= -DINET6
 .if ${MK_INET_SUPPORT} != "no"
 CFLAGS+= -DINET
 .endif
-.if ${MK_JAIL} != "no" && !defined(RESCUE)
+.if ${MK_JAIL} != "no"
 CFLAGS+= -DJAIL
 LIBADD+=	jail
 .endif

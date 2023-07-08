@@ -574,9 +574,7 @@ static __constructor void
 inet_ctor(void)
 {
 
-#ifndef RESCUE
 	if (!feature_present("inet"))
 		return;
-#endif
 	af_register(&af_inet);
 }

@@ -37,7 +37,7 @@ CFLAGS+=-I${.CURDIR} -I${SRCDIR} -I${SRCDIR}/regex \
 
 LIBADD=	util tinfow ncursesw
 
-.if ${MK_ICONV} == "yes" && !defined(RESCUE)
+.if ${MK_ICONV} == "yes"
 CFLAGS+=	-DUSE_ICONV -DICONV_TRADITIONAL
 .endif
 

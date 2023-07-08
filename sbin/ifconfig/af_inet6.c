@@ -781,11 +781,8 @@ inet6_ctor(void)
 {
 	size_t i;
 
-#ifndef RESCUE
 	if (!feature_present("inet6"))
 		return;
-#endif
-
 	for (i = 0; i < nitems(inet6_cmds);  i++)
 		cmd_register(&inet6_cmds[i]);
 	af_register(&af_inet6);

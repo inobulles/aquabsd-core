@@ -377,7 +377,7 @@ for i in ${templates} ; do
 	if [ -f $j ]; then
 	    create_md $subdir
 	    echo "Loading /$subdir from cpio archive $j"
-	    (cd / ; /rescue/tar -xpf $j)
+	    (cd / ; tar -xpf $j)
 	fi
     done
     for j in /conf/$i/*/extract ; do
