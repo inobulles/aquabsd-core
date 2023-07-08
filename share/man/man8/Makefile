@@ -11,7 +11,6 @@ MAN=	\
 	nanobsd.8 \
 	rc.8 \
 	rc.subr.8 \
-	rescue.8 \
 	${_uefi.8} \
 
 MLINKS= \
