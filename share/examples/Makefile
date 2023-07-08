@@ -11,7 +11,6 @@ LDIRS=	BSD_daemon \
 	FreeBSD_version \
 	IPv6 \
 	bootforth \
-	csh \
 	diskless \
 	drivers \
 	etc \
@@ -71,9 +70,6 @@ SE_BOOTFORTH= \
 	menu.4th \
 	menuconf.4th \
 	screen.4th
-
-SE_DIRS+=	csh
-SE_CSH=	dot.cshrc
 
 SE_DIRS+=	diskless
 SE_DISKLESS= \
