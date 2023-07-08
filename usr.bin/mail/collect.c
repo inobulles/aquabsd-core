@@ -356,7 +356,7 @@ cont:
 				(void)unlink(tempname2);
 
 				if ((sh = value("SHELL")) == NULL)
-					sh = _PATH_CSHELL;
+					sh = _PATH_BSHELL;
 
 				rc = run_command(sh, 0, nullfd, fileno(fbuf),
 				    "-c", cp+1, NULL);
@@ -579,7 +579,7 @@ mespipe(FILE *fp, char cmd[])
 	 * stdout = new message.
 	 */
 	if ((sh = value("SHELL")) == NULL)
-		sh = _PATH_CSHELL;
+		sh = _PATH_BSHELL;
 	if (run_command(sh,
 	    0, fileno(fp), fileno(nf), "-c", cmd, NULL) < 0) {
 		(void)Fclose(nf);

@@ -110,7 +110,6 @@ static const struct {
 	{ _PATH_VARTMP,		PATH_DIR		},
 
 	{ _PATH_BSHELL,		PATH_FILE		},
-	{ _PATH_CSHELL,		PATH_FILE		},
 	{ _PATH_VI,		PATH_FILE		},
 };
 

@@ -252,7 +252,6 @@ initshells(void)
 		 * added in /etc/shells.
 		 */
 		sl_add(sl, strdup(_PATH_BSHELL));
-		sl_add(sl, strdup(_PATH_CSHELL));
 	}
 	sl_add(sl, NULL);
 
