@@ -52,10 +52,8 @@
 #define HAVE_AIO_H 1
 
 #ifdef __amd64__
-#ifndef RESCUE
 /* Define if host toolchain supports AVX */
 #define HAVE_AVX 1
-#endif
 
 /* Define if host toolchain supports AVX2 */
 #define HAVE_AVX2 1

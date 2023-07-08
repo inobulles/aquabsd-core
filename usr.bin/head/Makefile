@@ -9,7 +9,7 @@ LIBADD=	util
 HAS_TESTS=
 SUBDIR.${MK_TESTS}+= tests
 
-.if ${MK_CASPER} != "no" && !defined(RESCUE)
+.if ${MK_CASPER} != "no"
 LIBADD+=        casper
 LIBADD+=        cap_fileargs
 CFLAGS+=-DWITH_CASPER

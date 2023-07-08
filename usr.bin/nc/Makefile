@@ -10,7 +10,7 @@ SRCS=	netcat.c atomicio.c socks.c
 CFLAGS+=-DIPSEC
 LIBADD=	ipsec
 
-.if ${MK_STATS} != "no" && !defined(RESCUE)
+.if ${MK_STATS} != "no"
 LIBADD+=	sbuf stats
 CFLAGS+=	-DWITH_STATS
 .endif

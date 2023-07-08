@@ -22,11 +22,7 @@ TCSHDIR= ${SRCTOP}/contrib/tcsh
 .PATH: ${TCSHDIR}
 
 PROG=	csh
-.if defined(RESCUE)
-DFLAGS= -D_PATH_TCSHELL='"/rescue/${PROG}"'
-.else
 DFLAGS= -D_PATH_TCSHELL='"/bin/${PROG}"'
-.endif
 CFLAGS+= -I. -I${.CURDIR} -I${TCSHDIR} ${DFLAGS}
 WARNS?=	1
 SRCS=	sh.c sh.dir.c sh.dol.c sh.err.c sh.exec.c sh.char.c \
@@ -77,7 +73,7 @@ NLSLINKS_de_DE.UTF-8 = de_AT.UTF-8 de_CH.UTF-8
 NLSLINKS_fr_FR.UTF-8 = fr_BE.UTF-8 fr_CA.UTF-8 fr_CH.UTF-8
 NLSLINKS_it_IT.UTF-8 = it_CH.UTF-8
 
-.if ${MK_NLS_CATALOGS} == "no" || defined(RESCUE)
+.if ${MK_NLS_CATALOGS} == "no"
 CFLAGS+= -DNO_NLS_CATALOGS
 .else
 CFLAGS+= -DHAVE_ICONV

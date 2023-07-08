@@ -7,7 +7,7 @@ PROG=	tail
 SRCS=	forward.c misc.c read.c reverse.c tail.c
 LIBADD=	util
 
-.if ${MK_CASPER} != "no" && !defined(RESCUE)
+.if ${MK_CASPER} != "no"
 LIBADD+= casper
 LIBADD+= cap_fileargs
 CFLAGS+= -DWITH_CASPER

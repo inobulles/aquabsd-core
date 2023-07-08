@@ -7117,15 +7117,6 @@ OLD_FILES+=usr/libexec/rbootd
 OLD_FILES+=usr/share/man/man8/rbootd.8.gz
 .endif
 
-.if ${MK_RESCUE} == no
-. if exists(${DESTDIR}${TESTSBASE})
-RESCUE_DIRS!=find ${DESTDIR}/rescue -type d 2>/dev/null | sed -e 's,^${DESTDIR}/,,'; echo
-OLD_DIRS+=${RESCUE_DIRS}
-RESCUE_FILES!=find ${DESTDIR}/rescue \! -type d 2>/dev/null | sed -e 's,^${DESTDIR}/,,'; echo
-OLD_FILES+=${RESCUE_FILES}
-. endif
-.endif
-
 .if ${MK_ROUTED} == no
 OLD_FILES+=etc/rc.d/routed
 OLD_FILES+=rescue/routed

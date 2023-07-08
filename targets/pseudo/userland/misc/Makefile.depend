@@ -19,9 +19,7 @@ _sys_boot_zfs= stand/zfs
 DIRDEPS = \
 	etc \
 	etc/newsyslog.conf.d \
-	etc/sendmail \
-	rescue/librescue \
-	rescue/rescue \
+	etc/sendmail
 
 .if ${MK_BOOT} != "no"
 DIRDEPS+= stand/common

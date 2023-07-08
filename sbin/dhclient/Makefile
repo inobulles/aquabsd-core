@@ -47,7 +47,7 @@ LIBADD=	util
 
 .if ${MK_DYNAMICROOT} == "no"
 .warning ${PROG} built without libcasper support
-.elif ${MK_CASPER} != "no" && !defined(RESCUE)
+.elif ${MK_CASPER} != "no"
 LIBADD+=        casper
 LIBADD+=        cap_syslog
 CFLAGS+=-DWITH_CASPER
