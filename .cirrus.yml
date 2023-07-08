@@ -1,13 +1,10 @@
-# $FreeBSD$
-
-freebsd_instance:
-  image_family: freebsd-14-0-snap
+compute_engine_instance:
+  platform: freebsd
+  image_project: freebsd-org-cloud-dev
+  image: freebsd-13-2-release-amd64
   cpu: 8
   memory: 8G
   disk: 40
-
-env:
-  PKG_FORMAT: tar
 
 task:
   name: Build aquaBSD base and kernel for 'amd64' target
